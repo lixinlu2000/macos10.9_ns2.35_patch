@@ -1,0 +1,6931 @@
+diff -Naur ns-2.34-orig/ara/ara_alg.cc ns-2.34/ara/ara_alg.cc
+--- ns-2.34-orig/ara/ara_alg.cc	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/ara/ara_alg.cc	2015-02-22 22:29:40.997736062 +0100
+@@ -0,0 +1,138 @@
++#include <assert.h>
++#include <ara/ara_alg.h>
++
++/**
++ * 
++ * <code>Algorithm</code>: esta classe contem os algoritmos necessarios a auxiliar a decisao
++ * sobre o encaminhamento do trafego na rede.
++ * 
++ * @author fernando
++ *
++ * Algorithm:
++ * 
++ * 14/03/2005
++ */
++    
++/**
++ * Dado uma <code>List</code> de valores normalizados <code>Doubles</code>
++ * (isto e, soma das possibilidades igual a '1') escolhe de forma aleatoria um indice da lista.<br>
++ * A utilizacao desta funcao e usada em qualquer escolha de encaminhamento do trafego tal estas
++ * sao feitas como uma escolha estocastica entre as listas de routas.
++ * O valor devolvido <code>int</code> deve ser usado como indice da lista das rotas
++ * possiveis.
++ *
++ * @param probabilityDistr uma <code>List</code> de probabilidades normalizada
++ * (tipo:<code>Double</code>)
++ * @return indice da escolha calculada
++ */
++int
++ARAAlg::calculateChoice(double *probabilityDistr){
++  double rndNumber = RANDOM;
++  int counter = -1;
++
++  do {
++    rndNumber -= probabilityDistr[++counter];
++  } while (rndNumber > 0);
++  
++  return counter;
++}
++
++    
++/**
++ * Dado uma <code>List</code> de <code>Doubles</code> modifica os valores para
++ * uma <code>List</code> de <code>Doubles</code> normalizado pela soma
++ * dos valores.
++ *
++ * @param probabilityDistr uma <code>List</code> nao normalizada de probabilidades
++ *  (tipo:<code>Double</code>)
++ */
++void
++ARAAlg::normalizeDistribution(double *probabilityDistr, int size) {
++  double sum = 0.0;
++
++  sum = sumArray(probabilityDistr, size);
++  assert(sum > 0.0);
++
++  for(int i = 0; i < size; i++) {
++    probabilityDistr[i] /= sum;
++  }
++}
++
++    
++/**
++ * <code>averageDelay()</code>: calculo da media utilizando o metodo
++ * Exponential Weigth Moving Average.
++ * 
++ * @param average: media actual
++ * @param delay: atraso a adicionar a media
++ * @return delvolve o novo valor de media
++ */
++double
++ARAAlg::averageDelay(double average, double delay)
++{
++  int newAvgDelay = (int)(average*10000);
++  int variation = (int)((delay - average)*10000);
++    	
++  if(variation > 0)
++    variation >>= 5;
++  else
++    variation >>= 2;
++  newAvgDelay += variation;
++        
++  return (double)newAvgDelay/10000.0;
++}
++    
++    
++/**
++ * <code>newAverageDelay()</code>: calculo da media utilizando o metodo
++ * Exponential Weigth Moving Average.
++ * 
++ * @param average: media actual
++ * @param delay: atraso a adicionar a media
++ * @return delvolve o novo valor de media
++ */
++double
++ARAAlg::newAverageDelay(double average, double delay)
++{
++  double variation = delay-average;
++        
++  return average*ALFA+variation*BETA;
++}
++    
++    
++/**
++ * <code>sumArray()</code>: devolve a soma de todos os valores presentes no array
++ * 
++ * @param array: contem os valores a somar
++ * 
++ * @return resultado da soma
++ * 
++ * @author: fernando
++ * Data:16/03/2005
++ */
++double
++ARAAlg::sumArray(double *array, int size)
++{
++  double sum = 0;
++  
++  for(int i = 0; i < size; i++)
++    sum += array[i];
++
++  if(sum * 1000 < 0.0001)
++      sum = -1.0;
++  
++  return sum;
++}
++    
++    
++    
++/*
++ * hash(): hash function to calculate a new int value
++ *
++ * author: Fernando Correia; date: Jun06
++ */
++int
++ARAAlg::hash(int key, int v1, int v2)
++{
++  return ((v1*v2) % key);
++}
+diff -Naur ns-2.34-orig/ara/ara_alg.h ns-2.34/ara/ara_alg.h
+--- ns-2.34-orig/ara/ara_alg.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/ara/ara_alg.h	2015-02-22 22:29:40.997736062 +0100
+@@ -0,0 +1,26 @@
++#ifndef _ARA_ALG_H
++#define _ARA_ALG_H
++
++#include <tools/random.h>
++
++#define RANDOM   Random::uniform()
++#define ALFA     0.9
++#define BETA     (1.0 - ALFA)
++#define MAX_PRIME 65521        /* prime number for hash function */
++
++
++class ARAAlg {
++  ARAAlg(){}
++
++ public:
++  static int calculateChoice(double *);
++  static int hash(int, int, int);
++  static void normalizeDistribution(double *, int);
++  static double averageDelay(double, double);
++  static double newAverageDelay(double, double);
++  static double sumArray(double *, int);
++
++  enum {SORT_SEQ, SORT_DELAY, SORT_WHEN};
++};
++
++#endif
+diff -Naur ns-2.34-orig/ara/ara_base.cc ns-2.34/ara/ara_base.cc
+--- ns-2.34-orig/ara/ara_base.cc	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/ara/ara_base.cc	2015-02-22 22:29:40.997736062 +0100
+@@ -0,0 +1,62 @@
++#include <iostream>
++#include <stdlib.h>
++#include <math.h>
++#include <ara/ara_base.h>
++
++/*
++ * class constructor
++ *
++ * author: Fernando Correia; date: May06
++ */
++ARABase::ARABase(double theKey) :
++  key(theKey)
++{
++}
++
++ARABase::ARABase()
++{
++  std::cout << "Donkey! You forget to pass the ID to ARABase class." << std::endl;
++  abort();
++}
++
++
++
++/*
++ * getKey(): returns the base class key
++ *
++ * IN:
++ *   NIL
++ *
++ * OUT:
++ *   int: value of key
++ *
++ * author: Fernando Correia; data: May06
++ */
++double
++ARABase::getKey() const
++{
++  return key;
++}
++
++
++
++/*
++ * calcHash(): calculates an identification value for a flowId
++ *  hash = (daddr==0) ? saddr+2 : ((saddr+2)^daddr)%
++ *
++ * IN:
++ *   nsaddr_t saddr: flow source address
++ *   nsaddr_t daddr: flow destination address
++ *
++ * OUT:
++ *   int: hash value
++ *
++ * author: Fernando Correia; date: May06
++ */
++double
++ARABase::calcHash(nsaddr_t a, nsaddr_t b)
++{
++  return pow((double)(a+1), (double)(b+1));
++}
++
++
+diff -Naur ns-2.34-orig/ara/ara_base.h ns-2.34/ara/ara_base.h
+--- ns-2.34-orig/ara/ara_base.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/ara/ara_base.h	2015-02-22 22:29:40.997736062 +0100
+@@ -0,0 +1,27 @@
++#ifndef _ARA_BASE_H
++#define _ARA_BASE_H
++
++#include <packet.h>
++
++/* declaration for base class
++ *
++ * class ARABase()                                    
++ *
++ * author: Fernando Correia, date: Mai06
++ */
++
++class ARABase {
++
++  double key;
++
++ public:
++  ARABase();
++  ARABase(double theKey);              /* class constructor */
++  virtual ~ARABase() {};
++
++  virtual double getKey() const;
++
++  static double calcHash(nsaddr_t, nsaddr_t);
++};
++
++#endif
+diff -Naur ns-2.34-orig/ara/ara_path.cc ns-2.34/ara/ara_path.cc
+--- ns-2.34-orig/ara/ara_path.cc	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/ara/ara_path.cc	2015-02-22 22:29:40.997736062 +0100
+@@ -0,0 +1,80 @@
++#include <ara/ara_path.h>
++
++
++/*
++ * ARAPath() class constructor
++ *
++ * IN:
++ *   double theKey: identifier for the path
++ *   int    thHops: number of hops for this path
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia; date: May06
++ */
++ARAPath::ARAPath(double theKey, int theHops) :
++  ARABase(theKey),
++  nhops(theHops),
++  nants(1)
++{
++}
++
++
++/*
++ * incNumAnt(): increments one unit on number of ants
++ *
++ * IN:
++ *   NIL
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia; date May06
++ */
++void
++ARAPath::incNumAnt()
++{
++  nants++;
++}
++
++
++
++/*
++ * getNumAnts(): return the number of ants registered on this path
++ *
++ * IN:
++ *   NIL
++ *
++ * OUT:
++ *   int: number of ants
++ *
++ * author: Fernando Correia; date May06
++ */
++int 
++ARAPath::getNumAnts()
++{
++  return nants;
++}
++
++
++
++/*
++ * getNumHops(): return the number of hops registered on this path
++ *
++ * IN:
++ *   NIL
++ *
++ * OUT:
++ *   int: number of hops
++ *
++ * author: Fernando Correia; date May06
++ */
++int 
++ARAPath::getNumHops()
++{
++  return nhops;
++}
++
++
++
+diff -Naur ns-2.34-orig/ara/ara_path.h ns-2.34/ara/ara_path.h
+--- ns-2.34-orig/ara/ara_path.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/ara/ara_path.h	2015-02-22 22:29:40.998736095 +0100
+@@ -0,0 +1,21 @@
++#ifndef _ARA_PATH_H
++#define _ARA_PATH_H
++
++#include <ara/ara_base.h>
++
++class ARAPath : public ARABase{
++
++  int nhops;                    /* path number of hops */
++  int nants;                    /* number of ants passed through the pass */
++
++ public:
++  ARAPath(double, int);
++  virtual ~ARAPath() {};
++
++  virtual void incNumAnt();
++  virtual int getNumAnts();
++  virtual int getNumHops();
++
++};
++
++#endif
+diff -Naur ns-2.34-orig/ara/ara_pkt.h ns-2.34/ara/ara_pkt.h
+--- ns-2.34-orig/ara/ara_pkt.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/ara/ara_pkt.h	2015-02-22 22:29:40.998736095 +0100
+@@ -0,0 +1,99 @@
++#ifndef _ARA_PKT_H
++#define _ARA_PKT_H
++
++#include <packet.h>
++
++/* types of ARA packet headers  */
++#define ARA_HELLO 0             /* anounce to the neighbours */
++#define ARA_FANT  1             /* route request */
++#define ARA_BANT  2             /* route reply */
++#define ARA_RERR  3             /* route error */
++#define ARA_RFANT 4             /* route repair FANT */
++#define ARA_RBANT 5             /* route repair BANT */
++
++#define ARA_HELLO_SIZE sizeof(nsaddr_t)+sizeof(u_int8_t)
++#define ARA_FANT_SIZE  sizeof(nsaddr_t)*4+8
++#define ARA_RFANT_SIZE sizeof(nsaddr_t)*3+7
++#define ARA_BANT_SIZE  sizeof(nsaddr_t)*3+9
++#define ARA_RBANT_SIZE sizeof(nsaddr_t)*3+8
++#define ARA_RERR_SIZE  sizeof(nsaddr_t)*2+1
++#define ARA_RFRS_SIZE  sizeof(nsaddr_t)*3+1
++#define ARA_RRPR_SIZE  sizeof(nsaddr_t)*3+2
++
++/* 
++ * bit flags
++ * 8 7 6 5 4 3 2 1
++ * bit8: 
++ * bit7:
++ * bit6:
++ * bit5: 
++ * bit4: 
++ * bit3: preciso de reparar o caminho
++ * bit2: nao tenho caminho, e enviei erro
++ * bit1: ja encaminhei a FANT
++ */
++#define bit8 0x80
++#define bit7 0x40
++#define bit6 0x20
++#define bit5 0x10
++#define bit4 0x08
++#define bit3 0x04
++#define bit2 0x02
++#define bit1 0x01
++
++#define HDR_ARA(p) hdr_ara::access(p) /* macro to extract ara packet header */
++
++#define CURRENT_TIME   Scheduler::instance().clock()
++#define JITTER         (Random::uniform()*0.05)
++#define MAXRDPKT       256      /* max number of route discover packets */
++//define NETWORK_DIAMETER 255
++#define MAX_HOP        32
++
++// The followings are used for the forward() function. Controls pacing.
++#define DELAY 1.0           // random delay
++#define NO_DELAY -1.0       // no delay
++
++// think it should be 30 ms
++#define ARP_DELAY 0.01      // fixed delay to keep arp happy
++
++
++struct hdr_ara {
++  nsaddr_t src_;                /* flow source node */
++  nsaddr_t dst_;                /* flow destination node */
++  nsaddr_t prev_;               /* previous hop */
++  nsaddr_t next_;
++  u_int8_t ttl;
++  u_int8_t antValue;
++  u_int8_t flags;               /* bit to indicate packet state */
++  u_int8_t type_;               /* type of header in accordance with */
++  u_int16_t pid;                /* path id */
++  u_int16_t seq_num;            /* packet sequence number */
++  u_int16_t numhop;             /* number of hops */
++  u_int16_t dnumhop;
++    double time_stamp;
++
++  inline nsaddr_t& ara_src() {return src_;}
++  inline nsaddr_t& ara_dst() {return dst_;}
++  inline nsaddr_t& ara_nxt() {return next_;}
++  inline nsaddr_t& ara_prev() {return prev_;}
++  inline u_int8_t& ara_type() {return type_;}
++
++ /* Header acces methods required by PacketHeaderManager */
++  static int offset_;
++  inline static int& offset() {return offset_;}
++  inline static hdr_ara* access(const Packet* p){
++    return (hdr_ara*)p->access(offset_);
++  }
++};
++
++
++/* flow_t: struct with source and destination addresses */
++typedef struct _flow{
++  nsaddr_t saddr;
++  nsaddr_t daddr;
++} flow_t;
++
++
++
++#endif
++
+diff -Naur ns-2.34-orig/ara/ara_rqueue.cc ns-2.34/ara/ara_rqueue.cc
+--- ns-2.34-orig/ara/ara_rqueue.cc	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/ara/ara_rqueue.cc	2015-02-22 22:29:40.998736095 +0100
+@@ -0,0 +1,305 @@
++#include <assert.h>
++
++#include <cmu-trace.h>
++#include <ara/ara_rqueue.h>
++#include <ara/ara_pkt.h>
++
++//#define QDEBUG
++
++
++/*
++ * ARARQueueTimer::expire(): called uppon event timer triggered
++ *
++ * IN:
++ *   Event *e:
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia; date: May06
++ */
++void
++ARARQueueTimer::expire(Event *e)
++{
++  agent_->purge();              // delete old entries
++  if(agent_->len_)
++    agent_->timer_.resched(5.0);
++}
++
++
++
++/*
++  Packet Queue used by ARA.
++*/
++
++ARARQueue::ARARQueue():
++  timer_(this)
++{
++  head_ = tail_ = 0;
++  len_ = 0;
++  limit_ = ARA_RTQ_MAX_LEN;
++  timeout_ = ARA_RTQ_TIMEOUT;
++}
++
++void
++ARARQueue::enque(Packet *p) {
++struct hdr_cmn *ch = HDR_CMN(p);
++
++ /*
++  * Purge any packets that have timed out.
++  */
++ 
++ purge();
++ p->next_ = 0;
++ ch->ts_ = CURRENT_TIME + timeout_;
++
++ if (len_ == limit_) {
++ Packet *p0 = remove_head();	// decrements len_
++
++   assert(p0);
++   if(HDR_CMN(p0)->ts_ > CURRENT_TIME) {
++     drop(p0, DROP_RTR_QFULL);
++   }
++   else {
++     drop(p0, DROP_RTR_QTIMEOUT);
++   }
++   printf(" >> atingi o limite da fila, descarta a cabeca");
++ }
++ 
++ if(head_ == 0) {
++   head_ = tail_ = p;
++#ifdef DEBUG_ARA
++   printf(" >> fila vazia, coloca na cabeca");
++#endif
++ }
++ else {
++   tail_->next_ = p;
++   tail_ = p;
++#ifdef DEBUG_ARA
++   printf(" >> fila com elementos, coloca no fim");
++#endif
++ }
++ len_++;
++#ifdef QDEBUG
++   verifyQueue();
++#endif // QDEBUG
++   printf("\n"); 
++}
++                
++
++Packet*
++ARARQueue::deque() {
++Packet *p;
++
++ 
++ /*
++  * Purge any packets that have timed out.
++  */
++ purge();
++
++ p = remove_head();
++#ifdef QDEBUG
++ verifyQueue();
++#endif // QDEBUG
++ return p;
++
++}
++
++
++Packet*
++ARARQueue::deque(nsaddr_t dst) {
++Packet *p, *prev;
++
++
++ /*
++  * Purge any packets that have timed out.
++  */
++ purge();
++
++ findPacketWithDst(dst, p, prev);
++ assert(p == 0 || (p == head_ && prev == 0) || (prev->next_ == p));
++
++ if(p == 0) return 0;
++
++ if (p == head_) {
++   p = remove_head();
++ }
++ else if (p == tail_) {
++   prev->next_ = 0;
++   tail_ = prev;
++   len_--;
++ }
++ else {
++   prev->next_ = p->next_;
++   len_--;
++ }
++
++#ifdef QDEBUG
++ verifyQueue();
++#endif // QDEBUG
++ return p;
++
++}
++
++Packet*
++ARARQueue::deque(nsaddr_t s, nsaddr_t d) {
++Packet *p, *prev;
++
++
++ /*
++  * Purge any packets that have timed out.
++  */
++ purge();
++
++ findPacketWithDst(s, d, p, prev);
++ assert(p == 0 || (p == head_ && prev == 0) || (prev->next_ == p));
++
++ if(p == 0) return 0;
++
++ if (p == head_) {
++   p = remove_head();
++ }
++ else if (p == tail_) {
++   prev->next_ = 0;
++   tail_ = prev;
++   len_--;
++ }
++ else {
++   prev->next_ = p->next_;
++   len_--;
++ }
++
++#ifdef QDEBUG
++ verifyQueue();
++#endif // QDEBUG
++ return p;
++
++}
++
++char 
++ARARQueue::find(nsaddr_t dst) {
++Packet *p, *prev;  
++
++	
++ findPacketWithDst(dst, p, prev);
++ if (0 == p)
++   return 0;
++ else
++   return 1;
++
++}
++
++	
++	
++
++/*
++  Private Routines
++*/
++
++Packet*
++ARARQueue::remove_head() {
++Packet *p = head_;
++
++        
++ if(head_ == tail_) {
++   head_ = tail_ = 0;
++ }
++ else {
++   head_ = head_->next_;
++ }
++
++ if(p) len_--;
++
++ return p;
++
++}
++
++void
++ARARQueue::findPacketWithDst(nsaddr_t dst, Packet*& p, Packet*& prev) {
++  
++  
++  p = prev = 0;
++  for(p = head_; p; p = p->next_) {
++    //		if(HDR_IP(p)->dst() == dst) {
++    if(HDR_IP(p)->daddr() == dst) {
++      return;
++    }
++    prev = p;
++  }
++}
++
++
++void
++ARARQueue::findPacketWithDst(nsaddr_t s, nsaddr_t d, Packet*& p, Packet*& prev) {
++  
++  
++  p = prev = 0;
++  for(p = head_; p; p = p->next_) {
++    //		if(HDR_IP(p)->dst() == dst) {
++    if(HDR_IP(p)->saddr() == s && HDR_IP(p)->daddr() == d) {
++      return;
++    }
++    prev = p;
++  }
++}
++
++
++void
++ARARQueue::verifyQueue() {
++Packet *p, *prev = 0;
++int cnt = 0;
++
++
++ for(p = head_; p; p = p->next_) {
++   cnt++;
++   prev = p;
++ }
++ assert(cnt == len_);
++ assert(prev == tail_);
++
++}
++
++
++bool
++ARARQueue::findAgedPacket(Packet*& p, Packet*& prev) {
++  
++  p = prev = 0;
++  for(p = head_; p; p = p->next_) {
++    if(HDR_CMN(p)->ts_ < CURRENT_TIME) {
++      return true;
++    }
++    prev = p;
++  }
++  return false;
++}
++
++void
++ARARQueue::purge() {
++Packet *p, *prev;
++
++ while ( findAgedPacket(p, prev) ) {
++   assert(p == 0 || (p == head_ && prev == 0) || (prev->next_ == p));
++   
++   if(p == 0) return;
++   
++   if (p == head_) {
++     p = remove_head();
++   }
++   else if (p == tail_) {
++     prev->next_ = 0;
++     tail_ = prev;
++     len_--;
++   }
++   else {
++     prev->next_ = p->next_;
++     len_--;
++   }
++#ifdef QDEBUG
++   verifyQueue();
++#endif // QDEBUG
++   drop(p, DROP_RTR_QTIMEOUT);
++   p = prev = 0;
++ }
++ 
++}
++
+diff -Naur ns-2.34-orig/ara/ara_rqueue.h ns-2.34/ara/ara_rqueue.h
+--- ns-2.34-orig/ara/ara_rqueue.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/ara/ara_rqueue.h	2015-02-22 22:29:40.998736095 +0100
+@@ -0,0 +1,88 @@
++#ifndef _ARA_RQUEUE_H
++#define _ARA_RQUEUE_H
++
++#include <ip.h>
++#include <agent.h>
++
++/*
++ * The maximum number of packets that we allow a routing protocol to buffer.
++ */
++#define ARA_RTQ_MAX_LEN     32      // packets
++
++/*
++ *  The maximum period of time that a routing protocol is allowed to buffer
++ *  a packet for.
++ */
++#define ARA_RTQ_TIMEOUT     30	// seconds
++
++class ARARQueue;
++
++/* timer to clean old entries
++ *
++ * author: Fernando Correia; date: May06
++ */
++class ARARQueueTimer : public TimerHandler {
++ public:
++  ARARQueueTimer(ARARQueue *agent) : TimerHandler(){
++    agent_ = agent;
++  }
++
++ protected:
++  ARARQueue *agent_;
++
++  virtual void expire(Event *e);
++};
++
++
++
++class ARARQueue : public Connector {
++ /* friend class */
++  friend class ARARQueueTimer;
++
++ public:
++  ARARQueue();
++  
++  void          recv(Packet *, Handler*) { abort(); }
++  
++  void          enque(Packet *p);
++  
++  inline int    command(int argc, const char * const* argv) 
++    { return Connector::command(argc, argv); }
++  
++  /*
++   *  Returns a packet from the head of the queue.
++   */
++  Packet*       deque(void);
++  
++  /*
++   * Returns a packet for destination "D".
++   */
++  Packet*       deque(nsaddr_t dst);
++  /*
++   * Returns a packet from source 'S' to destination "D".
++   */
++  Packet*       deque(nsaddr_t src, nsaddr_t dst);
++  /*
++   * Finds whether a packet with destination dst exists in the queue
++   */
++  char          find(nsaddr_t dst);
++  
++ private:
++  Packet*       remove_head();
++  void          purge(void);
++  void		findPacketWithDst(nsaddr_t dst, Packet*& p, Packet*& prev);
++  void		findPacketWithDst(nsaddr_t s, nsaddr_t d, Packet*& p, Packet*& prev);
++  bool 		findAgedPacket(Packet*& p, Packet*& prev); 
++  void		verifyQueue(void);
++  
++  Packet        *head_;
++  Packet        *tail_;
++  
++  int           len_;
++  int           limit_;
++  double        timeout_;
++  ARARQueueTimer timer_;        /* timer for pheromones */
++  
++};
++
++#endif
+diff -Naur ns-2.34-orig/ara/ara_vector.cc ns-2.34/ara/ara_vector.cc
+--- ns-2.34-orig/ara/ara_vector.cc	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/ara/ara_vector.cc	2015-02-22 22:29:40.998736095 +0100
+@@ -0,0 +1,265 @@
++#include <assert.h>
++#include <stdio.h>
++#include <ara/ara_vector.h>
++#include <ara/ara_path.h>
++
++
++/*
++ * ARAVector() class constructor
++ *
++ * creates an object to receive ARABase objects in a collection
++ *
++ * author: Fernando Correia; date: May06
++ */
++ARAVector::ARAVector() :
++  size(0),
++  max_size_list(0),
++  total_size_lists(0),
++  next(NULL)
++{
++}
++
++
++/*
++ * ARAVector class destructor
++ *
++ * author: Fernando Correia; date: May06
++ */
++ARAVector::~ARAVector()
++{
++//  deleteAll();
++}
++
++
++
++/*
++ * add(): adds a new item to vector
++ *
++ * IN:
++ *   ARABase *obj: new object to put in vector
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia; date: May06
++ */
++int
++ARAVector::add(ARABase *obj)
++{
++    ARAVector *aux;
++    ARAVector *tmp = new ARAVector;
++
++    assert(obj);                   // verifies if obj pointer is valid
++    assert(tmp);
++
++    tmp->next = NULL;
++    tmp->obj = obj;
++
++    if(next == NULL)
++      next = tmp;
++    else{
++      aux = this->next;
++      while(aux->next)
++        aux = aux->next;
++      aux->next = tmp;
++    }
++
++    size++;
++    return size;
++}
++
++
++
++/*
++ * hasItem(): verifies the vector for presence of a key
++ *
++ * IN:
++ *   int theKey: the key value to verify
++ *
++ * OUT:
++ *   int: if the key is present return the right idx, if not, returns -1
++ *
++ * author: Fernando Correia; date: May06
++ */
++int
++ARAVector::hasItem(double theKey)
++{
++  return hasItem(theKey, 0);
++}
++
++
++int
++ARAVector::hasItem(double theKey, int startIdx)
++{
++
++  if(startIdx < 0 || startIdx >= size)
++  	return -1;
++	
++  ARAVector *aux = this->next;
++  int i;
++
++  for(i = 0; i < startIdx && aux; i++)
++    aux = aux->next;
++
++  if(!aux) return -1;
++
++  while(aux){
++    if(aux->obj->getKey() == theKey)
++      return i;
++    i++;
++    aux = aux->next;
++  }
++
++  return -1;
++}
++
++
++
++/*
++ * operator[](): returns the object for such position in vector
++ *
++ * IN:
++ *   int idx: array index
++ *
++ * OUT:
++ *   ARABase *obj: pointer for object in idx position
++ *
++ * author: Fernando Correia;, date: Mai06
++ */
++ARABase *
++ARAVector::operator[](int idx)
++{
++  if(idx < 0 || idx >= size)
++    return NULL;
++
++  ARAVector *aux = this->next;
++  for(int i = 0; i < idx; i++)
++    aux = aux->next;
++	
++  return aux ? aux->obj : NULL;
++}
++
++
++
++/*
++ * deleteItem(): deletes an item from vector
++ *
++ * IN:
++ *   int idx: index position for object to be deleted
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia; date: May06
++ */
++void
++ARAVector::deleteItem(int idx)
++{
++  if(idx < 0) return;
++
++  ARAVector *tmp, *aux = this;
++  assert(idx < size);           // verifies if idx is valid
++
++  for(int i = 0; i < idx; i++)
++    aux = aux->next;
++
++  tmp = aux->next;
++  aux->next = tmp->next;
++  delete tmp->obj;
++  delete tmp;
++  size--;                       // decrease one value to size
++
++}
++
++
++void
++ARAVector::deleteItem(double value)
++{
++  int idx;
++
++  idx = hasItem(value);
++  deleteItem(idx);
++}
++
++
++/*
++ * deleteAll(): deletes the vector and creates a new empty one
++ *
++ * IN:
++ *   NIL
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia; date: May06
++ */
++void
++ARAVector::deleteAll()
++{
++  if(size == 0)
++    return;
++
++  ARAVector *t1, *t2 = this->next;
++
++  while(t2){
++    t1 = t2;
++    t2 = t2->next;
++    delete t1->obj;
++    delete t1;
++  }
++
++  size = 0;
++  this->next = NULL;
++}
++
++
++/*
++ * getSize(): returns the size of vector
++ *
++ * IN:
++ *   NIL
++ *
++ * OUT:
++ *   int: the vector size
++ *
++ * author: Fernando Correia; date: May06
++ */
++int
++ARAVector::getSize() const
++{
++  return size;
++}
++
++
++
++void
++ARAVector::setMaxSizeList()
++{
++  if(size > max_size_list)
++    max_size_list = size;
++
++}
++
++
++
++void
++ARAVector::setTotalSizeLists(int total)
++{
++  if(total > total_size_lists)
++    total_size_lists = total;
++}
++
++
++int
++ARAVector::getMaxSizeList()
++{
++  return max_size_list;
++}
++
++
++
++int
++ARAVector::getTotalSizeLists()
++{
++  return total_size_lists;
++}
+diff -Naur ns-2.34-orig/ara/ara_vector.h ns-2.34/ara/ara_vector.h
+--- ns-2.34-orig/ara/ara_vector.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/ara/ara_vector.h	2015-02-22 22:29:41.013736586 +0100
+@@ -0,0 +1,39 @@
++
++
++#ifndef _ARA_VECTOR_H
++#define _ARA_VECTOR_H
++
++#include <packet.h>
++#include <ara/ara_base.h>
++
++class ARAVector {
++
++  int size;
++  int max_size_list;		/* variaveis internas de controlo */
++  int total_size_lists;		/* variaveis internas de controlo */
++  ARABase *obj;
++  ARAVector *next;
++
++
++ public:
++  ARAVector();                  /* class constructor */
++  virtual ~ARAVector();         /* class destructor */
++
++  virtual int add(ARABase *);  /* adds new element to vector */
++  virtual int hasItem(double);     /* verifies vector for item */
++  virtual int hasItem(double, int);
++  virtual int getSize() const;  /* returns the size of vector */
++  virtual ARABase* operator[](int); /* returns ARABase object pointer */
++
++  virtual void deleteItem(double);
++  virtual void deleteItem(int);
++  virtual void deleteAll();
++
++  virtual void setMaxSizeList();
++  virtual void setTotalSizeLists(int);
++  virtual int getMaxSizeList();
++  virtual int getTotalSizeLists();
++
++};
++
++#endif
+diff -Naur ns-2.34-orig/common/packet.h ns-2.34/common/packet.h
+--- ns-2.34-orig/common/packet.h	2009-06-14 19:35:44.000000000 +0200
++++ ns-2.34/common/packet.h	2015-02-22 22:36:57.885070403 +0100
+@@ -182,8 +182,13 @@
+ 	// AOMDV packet
+ static const packet_t PT_AOMDV = 61;
+ 
++	// Sara
++static const packet_t PT_SARA = 62; 
++static const packet_t PT_TXCBR = 63;
++
++
+         // insert new packet types here
+-static packet_t       PT_NTYPE = 62; // This MUST be the LAST one
++static packet_t       PT_NTYPE = 64; // This MUST be the LAST one
+ 
+ enum packetClass
+ {
+@@ -284,7 +289,11 @@
+ 		        delete [] name_;
+ 		name_ = nameNew;
+ 		nPkt_ = PT_NTYPE+1;
+-		
++
++
++		// Sara
++ 		name_[PT_TXCBR]= strdup("tx_cbr");
++		name_[PT_SARA]= strdup("sara");
+ 
+ 		name_[PT_TCP]= "tcp";
+ 		name_[PT_UDP]= "udp";
+@@ -570,6 +579,11 @@
+ 	int	error_;		// error flag
+ 	int     errbitcnt_;     // # of corrupted bits jahn
+ 	int     fecsize_;
++	// Sara
++	int 	pid_;
++	int 	psn_;
++	int 	pts_;
++	//
+ 	double	ts_;		// timestamp: for q-delay measurement
+ 	int	iface_;		// receiving interface (label)
+ 	dir_t	direction_;	// direction: 0=none, 1=up, -1=down
+@@ -617,6 +631,9 @@
+ 	
+         /* per-field member functions */
+ 	inline packet_t& ptype() { return (ptype_); }
++	// Sara
++	inline int& pid() { return (pid_); }
++
+ 	inline int& size() { return (size_); }
+ 	inline int& uid() { return (uid_); }
+ 	inline int& error() { return error_; }
+diff -Naur ns-2.34-orig/Makefile.in ns-2.34/Makefile.in
+--- ns-2.34-orig/Makefile.in	2009-06-14 19:35:44.000000000 +0200
++++ ns-2.34/Makefile.in	2015-02-22 22:29:41.013736586 +0100
+@@ -166,6 +166,10 @@
+ 	common/scheduler.o common/object.o common/packet.o \
+ 	common/ip.o routing/route.o common/connector.o common/ttl.o \
+ 	trace/trace.o trace/trace-ip.o \
++	sara/sara_session.o sara/sara_seqnum.o sara/sara_rt.o \
++	sara/sara_rotas.o sara/sara_ngh.o sara/sara.o \
++	ara/ara_alg.o ara/ara_base.o ara/ara_path.o \
++	ara/ara_vector.o ara/ara_rqueue.o tx_cbr/tx_cbr.o \
+ 	classifier/classifier.o classifier/classifier-addr.o \
+ 	classifier/classifier-hash.o \
+ 	classifier/classifier-virtual.o \
+diff -Naur ns-2.34-orig/mobile/god.cc ns-2.34/mobile/god.cc
+--- ns-2.34-orig/mobile/god.cc	2009-06-14 19:35:45.000000000 +0200
++++ ns-2.34/mobile/god.cc	2015-02-22 22:29:41.013736586 +0100
+@@ -462,17 +462,33 @@
+ }
+ 
+ 
++vector
++God::getNodeCoord(int id)
++{
++	assert(id < num_nodes);
++	mb_node[id]->update_position();
++	vector a(mb_node[id]->X(), mb_node[id]->Y(), mb_node[id]->Z());
++
++	return a;
++}
++
++
+ bool God::IsNeighbor(int i, int j)
+ {
+   assert(i<num_nodes && j<num_nodes);
+ 
+   //printf("i=%d, j=%d\n", i,j);
++/* comment the following lines
+   if (mb_node[i]->energy_model()->node_on() == false ||
+       mb_node[j]->energy_model()->node_on() == false ||
+       mb_node[i]->energy_model()->energy() <= 0.0 ||
+       mb_node[j]->energy_model()->energy() <= 0.0 ) {
+     return false;
+   }
++*/
++
++mb_node[i]->update_position();
++mb_node[j]->update_position();
+ 
+   vector a(mb_node[i]->X(), mb_node[i]->Y(), mb_node[i]->Z());
+   vector b(mb_node[j]->X(), mb_node[j]->Y(), mb_node[j]->Z());
+diff -Naur ns-2.34-orig/mobile/god.h ns-2.34/mobile/god.h
+--- ns-2.34-orig/mobile/god.h	2009-06-14 19:35:45.000000000 +0200
++++ ns-2.34/mobile/god.h	2015-02-22 22:29:41.014736619 +0100
+@@ -195,6 +195,8 @@
+         int getMyRightGrid(double x, double y);
+         int getMyTopGrid(double x, double y);
+         int getMyBottomGrid(double x, double y);
++
++	vector getNodeCoord(int id); // add this line
+         
+         inline int getMyGridSize() {
+ 		return gridsize_;
+diff -Naur ns-2.34-orig/queue/priqueue.cc ns-2.34/queue/priqueue.cc
+--- ns-2.34-orig/queue/priqueue.cc	2009-06-14 19:35:44.000000000 +0200
++++ ns-2.34/queue/priqueue.cc	2015-02-22 22:39:10.267433425 +0100
+@@ -90,6 +90,8 @@
+ 		case PT_MESSAGE:
+                 case PT_TORA:
+                 case PT_AODV:
++		// Sara
++		case PT_SARA:
+                 // AOMDV patch
+ 		case PT_AOMDV:
+ 			recvHighPriority(p, h);
+diff -Naur ns-2.34-orig/sara/sara.cc ns-2.34/sara/sara.cc
+--- ns-2.34-orig/sara/sara.cc	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/sara/sara.cc	2015-02-22 22:29:41.016736684 +0100
+@@ -0,0 +1,2929 @@
++#include <sara/sara.h>
++
++
++int hdr_sara::offset_;
++static class SARAHeaderClass : public PacketHeaderClass {
++public:
++  SARAHeaderClass() : PacketHeaderClass("PacketHeader/SARA",
++                                       sizeof(hdr_sara)) {
++    bind_offset(&hdr_sara::offset_);
++  }
++}class_rtSARA_hdr;
++
++
++static class SARAClass : public TclClass {
++public:
++  SARAClass() : TclClass("Agent/SARA") {}
++  TclObject* create(int argc, const char*const* argv) {
++    assert(argc==5);            // <obj name><$self><$class><$proc><id>
++    return (new Sara((nsaddr_t)Address::instance().str2addr(argv[4])));
++  }
++}class_rtSARA;
++
++
++
++
++/*
++ * failedCallback(): link management function
++ *
++ * author: Fernando Correia; date: Jun06
++ */
++static void
++saraFailedCallback(Packet *p, void *arg)
++{
++  ((Sara *)arg)->rt_ll_failed(p);
++}
++
++
++void
++SaraNghTimer::expire(Event *e) {
++  
++  agent_->resetSaraNghTimer();  // reschedule for next event
++}
++
++
++void
++SaraRvGPSTimer::expire(Event *e) {
++  agent_->calcPosicao(false);
++  agent_->resetSaraRvGPSTimer();
++}
++
++
++
++void
++SaraPathTimer::expire(Event *e) {
++  agent_->resetSaraPathTimer();
++}
++
++
++void 
++SaraFANTTimer::expire(Event *e) {
++  agent_->resetSaraFantTimer();
++}
++
++
++void
++SaraRRPRTimer::expire(Event *e) {
++  agent_->resetSaraRRPRTimer();
++}
++
++
++
++/*
++ * Sara() class constructor: initializes a new SARA object
++ *
++ * IN:
++ *   nsaddr_t id: node address
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia
++ * date: May05
++ */
++Sara::Sara(nsaddr_t id) : Agent(PT_SARA),   // initiate AGENT class
++			  no_addr(id),     // node address
++                          nr_pkt(0),
++			  ngh_timer_(this),// initiate and associate timer to Sara class
++			  rv_gps_timer_(this),
++			  path_timer_(this),
++			  fant_timer_(this),
++			  rrpr_timer_(this)
++{
++  bind("F_", &F);
++  bind("ph_valid_", &ph_valid);
++  bind("ph_max_level_", &ph_max_level);
++  bind("rand_seed_", &rand_seed);
++  bind("bcast_limit_", &bcast_limit);
++  bind("hello_int_", &hello_int);
++  bind("rd_int_", &rd_int);
++  bind("rr_int_", &rr_int);
++  bind("sd_int_", &sd_int);
++  bind("retry_", &nrRetry);
++  bind("metrica_", &metrica);
++  bind("gps_", &gps);
++  bind("delta_", &delta);
++  bind("log_cbr_", &log_cbr);
++  bind("ph_mod_", &ph_mod);
++  bind("taxa_evaporacao_", &taxa_evap);
++
++  ant_seq_num = 0;
++  count_route_disc = 0;     
++  count_route_repair = 0;
++  time_t t = time(NULL);
++  rand_seed == 0 ? Random::seed((int)t) : Random::seed(rand_seed);
++  startT = CURRENT_TIME;
++
++  resetSaraRvGPSTimer();
++}
++
++
++
++/*
++ * ~Sara() class destructor:
++ *
++ * IN:
++ *   NIL
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia
++ * date: May05
++ */
++Sara::~Sara()
++{
++}
++
++
++/*
++ * command(): receives information from TCL scrip and executes the commands
++ *
++ * IN:
++ *   int argc: number of arguments
++ *   const char*const+ argv: arguments
++ *
++ * OUT:
++ *   returns information about succes of command
++ *
++ * author: Fernando Correia
++ * date: May05
++ */
++int
++Sara::command(int argc, const char*const* argv)
++{
++  if (argc == 2){               // Q: has two arguments ?
++    if(strcasecmp(argv[1], "stop") == 0){
++      if(caminho_dados.getSize() != 0){ 
++        sprintf(logBuffer_->pt_->buffer(),
++                "*P %lf _%d_ %d", CURRENT_TIME, getNodeAddr(), caminho_dados.getSize());
++        logBuffer_->pt_->dump();
++        caminho_dados.deleteAll();
++      }
++      sprintf(logBuffer_->pt_->buffer(),
++              "*D _%d_ %d %d", getNodeAddr(), count_route_disc, count_route_repair);
++      logBuffer_->pt_->dump();
++
++      // display the route table
++      /*
++      ARAVector rotas;
++      fprintf(stdout, "Tabela de encaminhamento de [%d]:\n", getNodeAddr());
++      for(int i = 0; i < rt.getSize(); i++){
++	((SARA_RT *)rt[i])->display();
++      }
++      */
++      // display route table size (in bytes)
++      /*
++      sprintf(logBuffer_->pt_->buffer(),
++	      "*RT _%d_ MAX=%d TOTAL=%d MAXB=%d TOTALB=%d",
++	      getNodeAddr(),
++	      rt.getMaxSizeList(), rt.getTotalSizeLists(), 
++	      rt.getMaxSizeList()*(sizeof(SARA_RT)-sizeof(ARABase)+4-sizeof(SaraRtTimer)-sizeof(ARAVector)), 
++	      rt.getTotalSizeLists()*(sizeof(SARA_Rotas)-sizeof(ARABase)+4));
++      logBuffer_->pt_->dump();
++      */
++      return TCL_OK;
++    }
++    else if (strcasecmp(argv[1], "start") == 0){ // Q: receives start command ?
++      ngh_timer_.resched(Random::uniform()*0.5);  // A: yes
++      calcPosicao(true);		// calculate initial position
++      next_hello = CURRENT_TIME + hello_int;
++      return TCL_OK;
++    }
++    else if(strcasecmp(argv[1], "print-gps") == 0){
++      sprintf(logBuffer_->pt_->buffer(),
++	      "*GPS (%f)/[%d] - R=%d V=%d Lat=%lf Long=%lf", CURRENT_TIME, getNodeAddr(), 
++	      rumo, velocidade, latitude, longitude);
++      logBuffer_->pt_->dump();
++      return TCL_OK;
++    }
++  }
++  else if (argc == 3) {       // Q: has three arguments ?
++    if(strcasecmp(argv[1], "route_desc") == 0){
++      nsaddr_t dnode = (nsaddr_t)atoi(argv[2]);
++      fprintf(stdout, "route discover procedure started -> no origem=%d, no destino=%d\n",
++              getNodeAddr(), dnode);
++      if(dnode == getNodeAddr()){ // Q: destination node is same as source ?
++        fprintf(stdout, "%s: %s lookup of %s failed\n",
++                __FILE__, argv[1], argv[2]);
++        return TCL_ERROR;       // A: yes, send an error
++      }
++      startRouteDiscovery(dnode);
++      return TCL_OK;
++    }
++    else if(strcmp(argv[1], "if-queue") == 0) {
++      ifqueue = (PriQueue*) TclObject::lookup(argv[2]);
++      
++      if(ifqueue == 0)
++	return TCL_ERROR;
++      return TCL_OK;
++    }
++    // obtains correspondeing dmux to carry packets to upper layers
++    else if(strcasecmp(argv[1], "port-dmux") == 0) {
++      demux_ = (PortClassifier*)TclObject::lookup(argv[2]);
++      if(demux_ == 0){
++        fprintf(stdout, "%s: %s lookup of %s failed\n",
++                __FILE__, argv[1], argv[2]);
++        return TCL_ERROR;
++      }
++      return TCL_OK;
++    }
++    else if (strcasecmp(argv[1], "log-route") == 0){  // Q: wants to trace route table ?
++      logRoute_ = (Trace*)TclObject::lookup(argv[2]); // A: yes, passing trace file pointer
++      if(logRoute_ == 0)        // Q: did you assign trace file pointer ?
++        return TCL_ERROR;       // A: no!
++      return TCL_OK;	
++    }
++    else if (strcasecmp(argv[1], "log-neighbor") == 0 ||
++             strcasecmp(argv[1], "tracetarget") == 0){  // Q: wants to trace neighbor table ?
++      logBuffer_ = (Trace*)TclObject::lookup(argv[2]); // A: yes, passing trace file pointer
++      if(logBuffer_ == 0)    // Q: did you assign trace file pointer ?
++        return TCL_ERROR;       // A: no!
++      return TCL_OK;	
++    }
++  }
++  else if (argc == 4) {       // Q: has three arguments ?
++    if(strcasecmp(argv[1], "sid") == 0){
++        sprintf(logBuffer_->pt_->buffer(), "*SID _%s_ _%s_", argv[2], argv[3]);
++        logBuffer_->pt_->dump();
++        return TCL_OK;
++    }
++  }
++  // pass the command to the base class
++  return Agent::command(argc, argv);
++}
++  
++
++
++
++
++/*
++ * sendSaraPkt(): sends to network an ARA packet
++ *
++ * IN:
++ *   u_int8_t sara_type: type of packet to send
++ *
++ * OUT:
++ *   NIL
++ * 
++ * author: Fernando Correia
++ * date: May06
++ */
++int
++Sara::sendSaraPkt(u_int8_t sara_type, args_t &args)
++
++{
++  Packet* p          = allocpkt();
++  struct hdr_cmn* ch = HDR_CMN(p);
++  struct hdr_ip* ih  = HDR_IP(p);
++  struct hdr_sara* sh = HDR_SARA(p);
++  nsaddr_t localAddr, nha;
++  int idx_nha;			// neighbor list index
++  int idx_fant;			// fant list index, by session
++  float localTime;
++  int result = 1;
++
++  char str_type[7][11] = {"SARA_HELLO", "SARA_FANT", "SARA_BANT", "SARA_RERR",
++		      "SARA_RFANT", "SARA_RBANT","SARA_FCONF"};
++
++  localAddr = getNodeAddr();
++  localTime = CURRENT_TIME;
++  assert(initialized());
++  // fills necessary ARA header fields in accordance with ARA type
++  switch(sara_type){
++  case SARA_HELLO:               // fills commun header parts for HELLO msg
++    sh->sara_prev() = args.prev;
++    sh->seq_num    = 0;         // sets sequence number to '0'
++    sh->velocidade = (u_int8_t)args.velocidade;
++    sh->rumo       = (u_int16_t)args.rumo;
++    sh->latitude   = (float)args.latitude;
++    sh->longitude  = (float)args.longitude;
++    sh->size       = SARA_HELLO_SIZE;
++    ch->size()     += (IP_HDR_LEN + SARA_HELLO_SIZE);
++    ch->next_hop() = IP_BROADCAST; // send to everyone
++    ih->daddr()    = IP_BROADCAST; // send to everyone
++    ih->ttl()      = 1;         // time to live: 1-hop distance
++    break;
++
++  case SARA_FANT:
++    idx_fant = fant.hasItem(ARABase::calcHash(args.src, args.dst));
++
++    sh->numhop     = args.nhops+1;
++    sh->seq_num    = args.sn;
++    sh->sara_src() = args.src;
++    sh->sara_dst() = args.dst;
++
++    if(args.next < 0){		// choose a path
++      if((idx_nha = findNextNode(args.src, args.dst, args.prev, args.sn)) < 0){
++	// idx_nha < 0: the node doesn't has an exit
++	if(args.src == getNodeAddr()){
++#ifdef DEBUG_SARA
++	  // source node, delets the packets from rqueue
++	  fprintf(stdout, "%lf - sendSaraPkt(%d): I am at source node and I don't have a route\n",
++		  CURRENT_TIME, getNodeAddr());
++#endif
++	  Packet::free(p);
++	  p = rqueue.deque(args.src, args.dst);
++	  while(p != NULL){
++	    drop(p, DROP_RTR_NO_ROUTE);
++	    p = rqueue.deque(args.src, args.dst);
++	  }
++	  // deletes RT entry
++	  rt.deleteItem((double)args.dst);
++	  // delete entry in session list
++	  sessao.deleteItem(ARABase::calcHash(getNodeAddr(), args.dst));
++	  if(sessao.getSize() == 0) // if there isn't ant more route discovery sessions
++	    path_timer_.force_cancel();	// stop timer
++          // source node without a valid route
++          result = 0;
++	}
++	else{
++	  // this is a path node
++#ifdef DEBUG_SARA
++	  fprintf(stdout, "%lf - sendSaraPkt(%d): I am a path node and I don't have a route\n",
++		  CURRENT_TIME, getNodeAddr());
++#endif
++	  Packet::free(p);
++	  // search in seqnum list the previous node address
++	  SARASeqNum *fant_sn = (SARASeqNum *)fant[idx_fant];
++	  prevh_t *ph = fant_sn->getHopList(args.sn);
++	  fant_sn->setFantState(args.sn, SARASeqNum::FANT_CONF);
++	  ph->resp = SARASeqNum::INFO_ERR;
++	  // update args structure
++	  args.next = ph->haddr;
++	  args.antValue = 1;
++	  args.pid = 0;
++	  args.flags = bit1;
++	  sendSaraPkt(SARA_RERR, args);
++	}
++	return result;
++      }
++
++      // can forward the FANT
++      nha = ((SARANeighbor *)ngh[idx_nha])->getEndereco();
++      // updates the seqnum list
++      ((SARASeqNum *)fant[idx_fant])->addNodeToList(nha);
++    }
++    else
++      nha = args.next;
++    
++    sh->sara_prev() = getNodeAddr();
++    sh->sara_nxt()  = nha;
++    sh->size        = SARA_FANT_SIZE;
++    ch->size()      = IP_HDR_LEN + SARA_FANT_SIZE;
++    ch->next_hop()  = args.next < 0 ? IP_BROADCAST : args.next;
++    ih->daddr()     = args.next < 0 ? IP_BROADCAST : args.next;
++    ih->ttl()       = 2;
++    break;
++
++  case SARA_FCONF:
++    sh->seq_num     = args.sn;
++    sh->sara_src()  = args.src;
++    sh->sara_dst()  = args.dst;
++    sh->size        = SARA_FCONF_SIZE;
++    ch->size()      = IP_HDR_LEN + SARA_FCONF_SIZE;
++    ch->next_hop()  = args.next;
++    ih->daddr()     = args.next;
++    ih->ttl()       = 2;
++    break;
++
++  case SARA_BANT:
++    sh->numhop      = args.nhops+1;
++    sh->seq_num     = args.sn;
++    sh->sara_src()  = args.src;
++    sh->sara_dst()  = args.dst;
++    sh->sara_prev() = getNodeAddr();
++    sh->sara_nxt()  = args.next;
++    sh->size        = SARA_BANT_SIZE;
++    ch->size()      = IP_HDR_LEN + SARA_BANT_SIZE;
++    ch->next_hop()  = args.next;
++    ih->daddr()     = args.next;
++    ih->ttl()       = 2;
++    break;
++
++  case SARA_RERR:
++    sh->sara_src()  = args.src;
++    sh->sara_dst()  = args.dst;
++    sh->sara_prev() = getNodeAddr();
++    sh->seq_num     = args.sn;
++    sh->sara_nxt()  = args.next;
++    sh->size        = SARA_RERR_SIZE;
++    ch->size()     += (IP_HDR_LEN + SARA_RERR_SIZE);
++    ch->next_hop()  = args.next;
++    ih->daddr()     = args.next;
++    ih->ttl()       = 2;
++    break;
++
++  case SARA_RFANT:
++    sh->numhop     = args.nhops+1;
++    sh->dnumhop    = args.dhops;
++    sh->seq_num    = args.sn;
++    sh->sara_src() = args.src;
++    sh->sara_dst() = args.dst;
++    sh->sara_prev()= getNodeAddr();
++    sh->sara_nxt() = args.next;
++    sh->ttl        = args.ttl+1;
++    sh->size       = SARA_RFANT_SIZE;
++    ch->size()    += (IP_HDR_LEN + SARA_RFANT_SIZE);
++    // Fernando Correia: changes in 10JUN10
++    // the route repair FANT (RFANT) must be transmitted in broadcast mode
++    // the ch->next_hop() field in commumn header was change
++    ch->next_hop() = IP_BROADCAST;
++    // end of change
++
++    ih->daddr()    = ch->next_hop();
++    ih->ttl()      = 2;
++    break;
++
++  case SARA_RBANT:
++    sh->numhop      = args.nhops+1;
++    sh->ttl         = args.ttl-1;
++    sh->seq_num     = args.sn;
++    sh->sara_src()  = args.src;
++    sh->sara_dst()  = args.dst;
++    sh->sara_prev() = getNodeAddr();
++    sh->sara_nxt()  = args.next;
++    sh->size        = SARA_RBANT_SIZE;
++    ch->size()     += (IP_HDR_LEN) + SARA_RBANT_SIZE;
++    ch->next_hop()  = args.next;
++    ih->daddr()     = args.next;
++    ih->ttl()       = 2;
++    break;
++  }
++
++  // general configuration for SARA packet
++  sh->flags      = args.flags;
++  sh->antValue   = args.antValue;
++  sh->sara_type()= sara_type;
++  sh->pid        = args.pid;
++
++  // general configuration for IP packet
++  ih->saddr() = getNodeAddr();
++  ih->sport() = RT_PORT;
++  ih->dport() = RT_PORT;
++
++  // general configuration for common header packet
++  ch->ptype()       = PT_SARA;
++  ch->prev_hop_     = getNodeAddr();
++  ch->direction()   = hdr_cmn::DOWN;
++  ch->addr_type()   = NS_AF_INET;
++  ch->xmit_failure_ = saraFailedCallback;
++  ch->xmit_failure_data_ = (void *)this;
++
++  sprintf(logBuffer_->pt_->buffer(),
++	  "*C _%d_ %d %d %s %d", getNodeAddr(), sh->size, sh->sara_nxt(), 
++	  str_type[sara_type], ch->next_hop());
++  logBuffer_->pt_->dump();
++
++  Scheduler::instance().schedule(target_, p, JITTER); // schedule to sent asap
++
++  return result;
++}
++
++
++
++/*
++ * recv(): receives packet from upper and lower layers
++ *
++ * IN:
++ *   Packet* p: packet received;
++ *   Handler* h:
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia
++ * date: May06
++ */
++void
++Sara::recv(Packet* p, Handler* h)
++{
++  struct hdr_cmn* ch   = HDR_CMN(p);
++  struct hdr_ip*  ih   = HDR_IP(p);
++  struct hdr_cbr* cbrh = HDR_CBR(p);
++  nsaddr_t localAddr, s, d, a;
++  double st;
++
++  localAddr = getNodeAddr();
++  s = ih->saddr();
++  d = ih->daddr();
++  a = (s == getNodeAddr()) ? getNodeAddr() : ch->prev_hop_;
++  st = CURRENT_TIME;
++  
++  if(DATA_PACKET(ch->ptype()) || ch->ptype() == PT_TXCBR){	// data packet received, send information for trace file
++      nr_pkt++;
++      if(ih->saddr() == getNodeAddr()){
++          ch->pts_ = CURRENT_TIME;
++          addSN(p);
++          sprintf(logBuffer_->pt_->buffer(),
++                  "*S _%d_ %d", getNodeAddr(),
++                  ch->ptype() == PT_TXCBR ? cbrh->len : ch->size());
++          logBuffer_->pt_->dump();
++          
++      }
++      else if(ih->daddr() == getNodeAddr()){
++          getSN(p);
++          if(ch->ptype() == PT_TXCBR){
++              sprintf(logBuffer_->pt_->buffer(),
++                      "*R _%d_ %d %f", getNodeAddr(), 
++                      cbrh->len, CURRENT_TIME - ch->pts_);
++          }
++          else if(DATA_PACKET(ch->ptype())){
++              sprintf(logBuffer_->pt_->buffer(),
++                      "*R _%d_ %d %lf", getNodeAddr(),
++                      ch->size()-20, CURRENT_TIME - ch->pts_);
++          }
++          logBuffer_->pt_->dump();
++      }
++  }
++  
++  
++  // check if the neighbor is known
++  SARANeighbor *sngh;
++  int idx;
++  
++  if(here_.addr_ != a){
++      if((idx = ngh.hasItem((double)a)) < 0){
++          // first time
++          sngh = addVizinho(a);
++      }
++      else{
++          // already exists, update infor
++          sngh = (SARANeighbor *)ngh[idx];
++          assert(sngh);
++      }
++      // update pheromone level and link state
++      actualizarFeromona(sngh);
++#ifdef DEBUG_SARA
++      fprintf(stdout, "%lf - recv(%d): link [%d] ON\n", st, localAddr, sngh->getEndereco());
++#endif          
++  }
++
++  // check if the source node is present in RT
++  int nhops = NETWORK_DIAMETER-ih->ttl();
++  if(here_.addr_ != s)	// this node isn't the source node
++      actualizarRT(a, s, d, nhops, sngh, ART_DATA_FLAG);
++
++  if(ch->ptype() == PT_SARA){	// received a control packet
++      recvSaraPkt(p);
++      return;
++  }
++  
++  if (ch->ptype() == PT_TXCBR){  // increase the hop number
++      cbrh->nhop++;
++  }
++  
++  
++  // source node
++  if((ih->saddr() == getNodeAddr()) && (ch->num_forwards() == 0)){
++      // check for TXCBR traffic
++      if(ch->ptype() == PT_TXCBR){
++          ih->daddr() = cbrh->daddr;
++          cbrh->saddr = getNodeAddr();
++          ch->size() += (IP_HDR_LEN + cbrh->len);
++      }
++      else
++          ch->size() += IP_HDR_LEN;	// add ip header
++    
++      if((u_int32_t)ih->daddr() != IP_BROADCAST){
++          ih->dport() = RT_PORT;
++          ih->ttl_ = NETWORK_DIAMETER-1;
++      }
++  }
++  else if(ih->saddr() == getNodeAddr()){
++    drop(p, DROP_RTR_ROUTE_LOOP);
++    return;
++  }
++  // forwarding packet
++  else{
++    if(--ih->ttl_ == 0){
++      drop(p, DROP_RTR_TTL);
++      return;
++    }
++  }
++
++
++  if((u_int32_t)ih->daddr() != IP_BROADCAST && ih->daddr() != getNodeAddr()){
++    rtResolve(p);		// check if there is a route and forward the packet
++  }
++  else{				// broadcast packet, just forward it
++    forwardData(p, NO_DELAY);
++  }
++
++}
++
++
++
++/*
++ * recvSAraPkt(): receives packet type SARA
++ *
++ * IN:
++ *   Packet* p: packet received;
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia
++ * date: May06
++ */
++void
++Sara::recvSaraPkt(Packet* p)
++{
++  struct hdr_sara* sh = HDR_SARA(p);
++  int local;
++  double st;
++
++  local = getNodeAddr();
++  st = CURRENT_TIME;
++
++  switch(sh->sara_type()){
++  case SARA_HELLO:
++    recvSaraHELLO(p);
++    break;
++
++  case SARA_FANT:
++    recvSaraFANT(p);
++    break;
++
++  case SARA_FCONF:
++    recvSaraFCONF(p);
++    break;
++
++  case SARA_RERR:
++    recvSaraRERR(p);
++    break;
++
++  case SARA_BANT:
++    recvSaraBANT(p);
++    break;
++
++  case SARA_RFANT:
++    recvSaraRFANT(p);
++    break;
++
++  case SARA_RBANT:
++    recvSaraRBANT(p);
++    break;
++
++  default:
++    fprintf(stdout, "%lf - recvSaraPkt(%d): received an unknown control packet [%d].\n",
++	    CURRENT_TIME, getNodeAddr(), sh->sara_type());
++  }
++
++  //release resource
++  Packet::free(p);
++
++}
++
++
++
++void
++Sara::recvSaraHELLO(Packet *p)
++{
++  struct hdr_ip* ih = HDR_IP(p);
++  struct hdr_sara* sh = HDR_SARA(p);
++
++  SARANeighbor *sngh;
++  SARACaminho *destino;
++  SARA_Rotas *rota;
++  SARA_RT *rota_dst;
++
++  nsaddr_t node_addr;
++  nsaddr_t localAddr;
++  double st;
++  int idx;
++
++  localAddr = getNodeAddr();
++  st = CURRENT_TIME;
++  if(ih->saddr() == getNodeAddr()){
++    fprintf(stdout, "%lf - recvSaraHELLO(%d) -> received a HELLO from myself.\n", 
++	    st, getNodeAddr());
++    return;
++  }
++
++  node_addr = sh->sara_prev();
++  if((idx = ngh.hasItem((double)node_addr)) < 0){
++    sngh = addVizinho(no_addr);
++  }
++  else{
++    sngh = (SARANeighbor *)ngh[idx];
++    if((destino = sngh->getDestino(node_addr)) == NULL){ // I know this neighbor but it isn't in my RT
++      destino = sngh->addDestino(node_addr); // 
++      idx = rt.hasItem((double)node_addr); // 
++      // updates the RT with a new route
++      if(idx < 0){
++	rota_dst = addRota(node_addr, SARA_RT::ACTIVO);
++	assert(rota_dst);	// valida objecto
++	rota = rota_dst->addRotas(node_addr, sngh, 1);
++      }
++      // the route is known but hasn't any neighbor node attached
++      else{
++	((SARA_RT *)rt[idx])->setEstado(SARA_RT::ACTIVO);	// set the route has active
++	if(((SARA_RT *)rt[idx])->hasCaminho(node_addr) < 0){	
++	  rota = ((SARA_RT *)rt[idx])->addRotas(node_addr, sngh, 1);
++	}
++	else{			
++	  rota = ((SARA_RT *)rt[idx])->getCaminho(no_addr);// obtem apontador do caminho
++	}
++      }
++      destino->caminho = rota;
++    }
++    destino->caminho->setSaltos(1); // if the destination is the neighbor, #hops is set to '1'
++  }
++
++  sngh->setAtitude(sh->rumo, sh->velocidade);
++  sngh->setPosicao(sh->longitude, sh->latitude);
++  sngh->resetState(delta);
++
++}
++
++
++
++void
++Sara::recvSaraFANT(Packet *p)
++{
++  SARASeqNum *fant_ses;
++  SARANeighbor *vizinho;
++  args_t args;
++  struct hdr_sara *sh = HDR_SARA(p);
++
++  int idx;
++  int fant_id;
++  int nhops;
++  nsaddr_t localAddr, no_ant, no_src, no_dst, no_seg;
++  double simt;
++
++  localAddr = getNodeAddr();
++  simt    = CURRENT_TIME;
++  no_src  = sh->sara_src();
++  no_dst  = sh->sara_dst();
++  no_ant  = sh->sara_prev();
++  no_seg  = sh->sara_nxt();
++  fant_id = sh->seq_num;
++  nhops   = sh->numhop;
++  args.sn = fant_id;
++  args.src= no_src;
++  args.dst= no_dst;
++
++  // check if there is a route repair procedure. If is true, delete from repair list
++  if((idx = reparar.hasItem(ARABase::calcHash(no_src, no_dst))) >= 0)
++    reparar.deleteItem(idx);
++  if((idx = reparar.hasItem(ARABase::calcHash(no_dst, no_src))) >= 0)
++    reparar.deleteItem(idx);
++
++  // verify the presence of a FANT
++  if((idx = fant.hasItem(ARABase::calcHash(no_src, no_dst))) < 0){ // first time for this session
++    fant_ses = new SARASeqNum(no_src, no_dst);
++    assert(fant_ses);
++    fant.add(fant_ses);
++  }
++  else{
++    fant_ses = (SARASeqNum *)fant[idx];
++#ifdef DEBUG_SARA
++    printf("%lf - recvSaraFant(%d)\n", CURRENT_TIME, getNodeAddr());
++#endif
++    // check is the object is still valid
++    if(CURRENT_TIME - fant_ses->lastUse > VALID_TIME){ // object to older
++      fant_ses->resetCounter();
++    }
++  }
++
++  if((idx = ngh.hasItem((double)no_ant)) < 0)
++    vizinho = addVizinho(no_ant);
++  else{
++    vizinho = (SARANeighbor *)ngh[idx];
++    vizinho->resetState(delta);
++  }
++
++  // updates route table
++    if(here_.addr_ != no_src)
++      nhops = actualizarRT(no_ant, no_src, no_dst, nhops, vizinho, ART_CTL_FLAG);
++
++  // ****** start FANT discover procedure *******
++  int estado_FANT = fant_ses->getFantState(fant_id);
++
++  // destination node
++  if(localAddr == no_dst){
++      fant_ses->addHop(fant_id, no_ant, sh->numhop, SARASeqNum::INFO_NGH);
++      args.next = no_ant;
++      args.pid  = localAddr + 1;
++      args.nhops= nhops;
++      sendSaraPkt(SARA_BANT, args);
++      fant_ses->setFantState(fant_id, SARASeqNum::FANT_CONF);
++  }
++      
++  // this isn't the forwardinf node
++  else if(localAddr != no_seg){
++    // FANT to confirm
++    if(estado_FANT == SARASeqNum::FANT_NCONF){
++      // FANT confirmation procedure
++      fant_ses->setFantState(fant_id, SARASeqNum::FANT_CONF);
++      fant_ses->decCounter();
++    }
++    // FANT without confirmation
++    else if(estado_FANT == SARASeqNum::FANT_SCONF){
++        // update FANT list
++        fant_ses->addHop(fant_id, no_ant, sh->numhop, SARASeqNum::INFO_NGH);
++        
++        /* check if the destination node is in the neighborhood */
++        if(ngh.hasItem((double)no_dst) >=0 ){
++            // send a BANT to source node through the shortest path
++            args.next = fant_ses->getShortPathAddr();
++            args.pid  = localAddr + 1;
++            args.nhops= 1;
++            sendSaraPkt(SARA_BANT, args);
++            fant_ses->setFantState(fant_id, SARASeqNum::FANT_CONF);
++        }
++        /* the path must be valid */
++        else if((idx = rt.hasItem((double)no_dst)) >= 0 &&
++                ((SARA_RT *)rt[idx])->getNrRotas() > 0 &&
++                ((SARA_RT *)rt[idx])->getSituacao() == SARA_RT::ACTIVO &&
++                ((SARA_RT *)rt[idx])->getEstado() != SARA_RT::DELE &&
++                localAddr != no_src){
++
++            // send a BANT to source node through the shortest path
++            args.next = fant_ses->getShortPathAddr();
++            args.pid  = localAddr + 1;
++            args.nhops= ((SARA_RT *)rt[idx])->getSaltos();
++            
++            sendSaraPkt(SARA_BANT, args);
++            fant_ses->setFantState(fant_id, SARASeqNum::FANT_CONF);
++        }
++    }
++  }
++  // if the code reach this line, it means the FANT already was confirmed
++
++  // this is the node responsible to forward the FANT
++  else{
++    // receive this FANT for the FIRST time
++      if(estado_FANT == SARASeqNum::FANT_SCONF){
++          fant_ses->addHop(fant_id, no_ant, sh->numhop, SARASeqNum::INFO_DST);
++          // check for the presence for destination node in the neighborhood
++          if((idx = ngh.hasItem((double)no_dst)) >= 0){
++              fant_ses->setFantState(fant_id, SARASeqNum::FANT_CONF);
++              // if the shortest path doesn't pass through the previous node, do:
++              if(fant_ses->getShortPathAddr() != no_ant){
++                  // send an explicit confirmation FANT to the previous node
++                  args.next = no_ant;
++                  sendSaraPkt(SARA_FCONF, args);
++              }
++              // send the BANT to the source node
++              args.next = fant_ses->getShortPathAddr();
++              args.pid  = localAddr + 1;
++              args.nhops= 1;
++              sendSaraPkt(SARA_BANT, args);
++          }
++
++          // check for the presence for a valid route to destination node
++          // works as the code before
++          else if((idx = rt.hasItem((double)no_dst)) >= 0 &&
++                  ((SARA_RT *)rt[idx])->getNrRotas() > 0 &&
++                  ((SARA_RT *)rt[idx])->getSituacao() == SARA_RT::ACTIVO &&
++                  ((SARA_RT *)rt[idx])->getEstado() != SARA_RT::DELE &&
++                  localAddr != no_src){
++              if(fant_ses->getShortPathAddr() != no_ant){
++                  args.next = no_ant;
++                  sendSaraPkt(SARA_FCONF, args);
++              }
++              args.next = fant_ses->getShortPathAddr();
++              args.pid  = localAddr + 1;
++              args.nhops= ((SARA_RT *)rt[idx])->getSaltos();
++              sendSaraPkt(SARA_BANT, args);
++          }
++      
++          // destination node is unknow, forward the FANT
++          else{
++              args.next = -1;
++              args.pid  = ARAAlg::hash(MAX_PRIME, (localAddr + 1), sh->pid);
++              args.flags= 0;
++              args.nhops= nhops;
++              // activate the confirmation procedure
++              fant_ses->setFantState(fant_id, SARASeqNum::FANT_NCONF);
++              fant_ses->incCounter();
++              fant_ses->fant[fant_id].conf_time = simt + sd_int;
++              if(fant_timer_.status() == 0)
++                  fant_timer_.resched(SARA_FANT_CONF);
++              sendSaraPkt(SARA_FANT, args);
++          }
++      }
++      // the FANT already pass through here but is wasn't confirmed
++      else if(estado_FANT == SARASeqNum::FANT_NCONF){
++          fant_ses->setFantState(fant_id, SARASeqNum::FANT_CONF);
++          fant_ses->decCounter();
++          args.next = no_ant;
++          args.pid  = 0;
++          args.nhops= nhops;
++          args.flags= bit1;
++          sendSaraPkt(SARA_RERR, args);
++      }
++
++      // at this point the FANT was already confirmed
++      else{
++          // repeat the procedure to check if the destination node is in the neighborhood
++          // or there is a valid route to destination
++          if((idx = rt.hasItem((double)no_dst)) >= 0 &&
++             ((SARA_RT *)rt[idx])->getNrRotas() > 0 &&
++             ((SARA_RT *)rt[idx])->getSituacao() == SARA_RT::ACTIVO &&
++             ((SARA_RT *)rt[idx])->getEstado() != SARA_RT::DELE &&
++             localAddr != no_src){
++              if(fant_ses->getShortPathAddr() != no_ant){
++                  args.next = no_ant;
++                  sendSaraPkt(SARA_FCONF, args);
++              }
++              
++              args.next = fant_ses->getShortPathAddr();
++              args.pid  = localAddr + 1;
++              args.nhops= ((SARA_RT *)rt[idx])->getSaltos();
++              sendSaraPkt(SARA_BANT, args);
++          }
++          // send an error message to the previous node
++          else{
++              args.next = no_ant;
++              args.pid  = 0;
++              args.nhops= nhops;
++              args.flags= bit1;
++              sendSaraPkt(SARA_RERR, args);
++          }
++      }
++  }
++}
++
++
++
++void
++Sara::recvSaraFCONF(Packet *p)
++{
++  SARASeqNum *fant_ses;
++  struct hdr_sara *sh = HDR_SARA(p);
++
++  int idx;
++  int fant_id;
++  nsaddr_t localAddr, no_src, no_dst;
++  double simt;
++
++  localAddr = getNodeAddr();
++  simt    = CURRENT_TIME;
++  no_src  = sh->sara_src();
++  no_dst  = sh->sara_dst();
++  fant_id = sh->seq_num;
++  
++  fprintf(stdout, "%lf - recvSaraFCONF(%d): i'm going to confirm FANT [%d] from session %d --> %d\n",
++	  simt, localAddr, fant_id, no_src, no_dst);
++  
++  // check FANT presence
++  if((idx = fant.hasItem(ARABase::calcHash(no_src, no_dst))) < 0){ // first time for this session
++      fant_ses = new SARASeqNum(no_src, no_dst);
++      assert(fant_ses);
++      fant.add(fant_ses);
++  }
++  else{
++      fant_ses = (SARASeqNum *)fant[idx];
++#ifdef DEBUG_SARA
++      printf("%lf - recvSaraFant(%d)\n", CURRENT_TIME, getNodeAddr());
++#endif
++  }
++  
++  // ****** FANT processing begins *******
++  int estado_FANT = fant_ses->getFantState(fant_id);
++  
++  if(estado_FANT == SARASeqNum::FANT_NCONF){ // the is not confirmed yet
++      fant_ses->setFantState(fant_id, SARASeqNum::FANT_CONF); // confirms the FANT
++      fant_ses->decCounter();	// decreases the number of FANT not confirmed yet
++  }
++}
++
++
++
++void
++Sara::recvSaraRERR(Packet *p)
++{
++  struct hdr_cmn *ch  = HDR_CMN(p);
++  struct hdr_sara *sh = HDR_SARA(p);
++  SARASeqNum *fant_ses;
++  SARA_RT *fant_rt;
++  int fant_id;
++  int fant_idx, rt_idx, viz_idx;
++  int src_nhops;
++  args_t args;
++  nsaddr_t local, no_seg, no_ant;
++  nsaddr_t no_src, no_dst;
++  double st;
++
++  local = getNodeAddr();
++  st = CURRENT_TIME;
++  no_src = sh->sara_src();
++  no_dst = sh->sara_dst();
++  no_ant = sh->sara_prev();
++
++  if(sh->flags & bit1){		// error message in FANT forwarding
++    if((fant_idx = fant.hasItem(ARABase::calcHash(no_src, no_dst))) < 0){
++      fprintf(stdout, "%lf - recvSaraRERR(%d): received a FANT_RERR but I don't know what to do.\n",
++	      st, local);
++      return;			// unknow FANT_ERROR received, delete the packet. Shouln'd happen
++    }
++    fant_ses = (SARASeqNum *)fant[fant_idx];
++    assert(fant_ses);
++    fant_id = sh->seq_num;
++
++    // Fernando Correia: changes in 10JUN10
++    // an error message acts like a FCONF message
++    if(fant_ses->getFantState(fant_id) == SARASeqNum::FANT_NCONF){
++        fant_ses->setFantState(fant_id, SARASeqNum::FANT_CONF);
++        fant_ses->decCounter();
++    }
++    // add to the used node list
++    fant_ses->addHop(fant_id, sh->sara_prev(), NETWORK_DIAMETER, SARASeqNum::INFO_ERR);
++    // end of changes
++
++    if(getNodeAddr() != sh->sara_src()){	// not the source node
++      if((rt_idx = rt.hasItem((double)sh->sara_src())) < 0){
++	fprintf(stdout, "%lf - recvSaraRERR(%d): loose information about to reach source node.\n",
++		st, local);
++	return;
++      }
++
++      fant_rt = (SARA_RT *)rt[rt_idx];
++      assert(fant_rt);
++      src_nhops = fant_rt->getSaltos();
++    }
++    else
++      src_nhops = 0;
++
++    if((rt_idx = rt.hasItem((double)sh->sara_dst())) >= 0){
++        fant_rt = (SARA_RT *)rt[rt_idx];
++        if(fant_rt->getEstado() == SARA_RT::ACTIVO){ // the node already has an active route
++            return;
++        }
++    }
++
++    args.sn   = fant_id;
++    args.src  = sh->sara_src();
++    args.dst  = sh->sara_dst();
++    args.next = -1;
++    args.prev = getNodeAddr() == sh->sara_src() ? getNodeAddr() : ch->prev_hop_;
++    args.pid  = getNodeAddr()+1;
++    args.flags= 0;
++    args.nhops= src_nhops;
++    
++    // check if the node can use another link
++    if(sendSaraPkt(SARA_FANT, args)){
++        // activate the confirmation procedure
++        fant_ses->fant[fant_id].conf_time = CURRENT_TIME+sd_int;
++        fant_ses->fant[fant_id].counter = 1;
++        if(fant_timer_.status() == 0)
++            fant_timer_.resched(SARA_FANT_CONF);
++    }
++    else{
++        // Fernando Correia: changes in 10JUN10
++        // if I arrive here, that's because the source node has no route
++        // in sendSaraPkt() there is a message to be sent to the display
++        // the code in here was removed
++    }
++  }
++  
++  // error message when repairing the route
++  else if(sh->flags & bit2){
++    fprintf(stdout, "%lf - recvSaraRERR(%d): error %d --> %d, of %d\n",
++	    st, local, no_src, no_dst, no_ant);
++
++    // must delete the routing information from the route table and from the neighbor list
++    viz_idx = ngh.hasItem((double)sh->sara_prev());
++    assert(viz_idx >= 0);
++    
++    SARANeighbor *viz = (SARANeighbor *)ngh[viz_idx];
++    viz->delDestino(no_dst);
++    
++    if((rt_idx = rt.hasItem((double)sh->sara_dst())) >= 0)
++      ((SARA_RT *)rt[rt_idx])->delRotas();
++    if(rt_idx < 0 || ((SARA_RT *)rt[rt_idx])->getNrRotas() == 0){ // i don't know how to reach destination node
++      rt.deleteItem(rt_idx);	// delete entry from RT
++      if(getNodeAddr() == sh->sara_src()){ // this is the source node
++	fprintf(stdout, "%lf - recvSaraRERR(%d): source node, start a new route discovery procedure - %d --> %d.\n",
++		CURRENT_TIME, getNodeAddr(), sh->sara_src(), sh->sara_dst());
++	startRouteDiscovery(sh->sara_dst());
++      }
++      else{
++          // this is a network node
++          args.src = sh->sara_src();
++          args.dst = sh->sara_dst();
++          no_seg = findNextNode(args.dst, args.src, getNodeAddr());
++          if(no_seg < 0){		// don't know how to send the error msg to source node
++              fprintf(stdout, "%lf - recvSaraRERR(%d): route repair error %d --> %d. Problems to inform the source node.\n",
++                      CURRENT_TIME, getNodeAddr(), args.src, args.dst);
++              return;
++          }
++
++          // send the error message to the source node
++          args.next  = no_seg;
++          args.flags = bit2;
++          if((fant_idx = fant.hasItem(ARABase::calcHash(args.src, args.dst))) >= 0)
++              fant.deleteItem(fant_idx);
++
++          sendSaraPkt(SARA_RERR, args);
++      }
++    }
++    // the node has an alternative route, use it
++    else
++        ((SARA_RT *)rt[rt_idx])->setEstado(SARA_RT::ACTIVO);
++  }
++}
++
++
++
++void
++Sara::recvSaraBANT(Packet *p)
++{
++  SARASeqNum *fant_ses = NULL;
++  SARANeighbor *vizinho;
++  ARAPath *tCaminho;
++  args_t args;
++  struct hdr_sara *sh = HDR_SARA(p);
++
++  int idx;
++  int bant_id;
++  int nhops;
++  nsaddr_t localAddr, no_ant, no_src, no_dst, no_seg;
++  double simt;
++
++  localAddr = getNodeAddr();
++  simt    = CURRENT_TIME;
++  no_src  = sh->sara_src();
++  no_dst  = sh->sara_dst();
++  no_ant  = sh->sara_prev();
++  bant_id = sh->seq_num;
++  nhops   = sh->numhop;
++
++  // check if there is a route repair procedure, if is present, delete that info from the list
++  if((idx = reparar.hasItem(ARABase::calcHash(no_src, no_dst))) >= 0)
++    reparar.deleteItem(idx);
++  if((idx = reparar.hasItem(ARABase::calcHash(no_dst, no_src))) >= 0)
++    reparar.deleteItem(idx);
++
++
++  // verify if there is a FANT to confirm, then confirm it
++  if((idx = fant.hasItem(ARABase::calcHash(no_src, no_dst))) < 0){
++#ifdef DEBUG_ROUTE_SARA
++    fprintf(stdout, "%lf - recvSaraBANT(%d): received a bant[%d] from session %d --> %d, but the FANt doesn't pass through this node.\n",
++	    CURRENT_TIME, getNodeAddr(), bant_id, no_src, no_dst);
++#endif
++  }
++  else{
++    fant_ses = (SARASeqNum *)fant[idx];
++#ifdef DEBUG_SARA
++    printf("%lf - recvSaraBANT(%d)\n", CURRENT_TIME, getNodeAddr());
++#endif
++    // check if the object is still valid
++    if(fant_ses->getFantState(bant_id) == SARASeqNum::FANT_NCONF){ // checks the presence of unconfirmed FANT's
++      fant_ses->setFantState(bant_id, SARASeqNum::FANT_CONF);	
++      fant_ses->decCounter();
++    }
++  }
++
++  // updates the neighbor list with the previous node
++  if((idx = ngh.hasItem((double)no_ant)) < 0)
++    vizinho = addVizinho(no_ant);
++  else{
++    vizinho = (SARANeighbor *)ngh[idx];
++    vizinho->resetState(delta);
++  }
++
++  // update route table
++  nhops = actualizarRT(no_ant, no_dst, no_src, nhops, vizinho, ART_CTL_FLAG);
++
++  if(fant_ses != NULL){
++    if(fant_ses->hasBANT(bant_id))
++        // already received a bant
++        return;
++    else
++        fant_ses->setBANT(bant_id);
++  }
++
++  if(getNodeAddr() == no_src){	// reach the source node
++    // add information to the discovered list
++    if((idx = caminho.hasItem((double)sh->pid)) < 0){ // new path found
++      tCaminho = new ARAPath(sh->pid, sh->numhop);
++      assert(tCaminho);
++      caminho.add(tCaminho);
++    }
++    else
++      ((ARAPath *)caminho[idx])->incNumAnt();
++
++    if(fant_ses){
++      fant_ses->endTime = CURRENT_TIME - fant_ses->startTime;
++      // write on the trace file the time required to discover the route
++      if(caminho.getSize() == 1){
++          sprintf(logBuffer_->pt_->buffer(),
++                  "*TD %lf _%d_ %d -S %d -D %d %lf",
++                  fant_ses->endTime, getNodeAddr(), caminho.getSize(), no_src, no_dst, simt);
++          logBuffer_->pt_->dump();
++      }
++      // write info in stdout
++#ifdef DEBUG_ROUTE_SARA
++      fprintf(stdout, "%lf - recvSaraBANT(%d): agent %d\n",
++	      CURRENT_TIME, getNodeAddr(), bant_id);
++      fprintf(stdout, "#discovered paths: %d\n", caminho.getSize());
++      fprintf(stdout, "Session: SRC=%d --> DST=%d\n", no_src, no_dst);
++      // ends the route descovered procedure
++      if((idx = sessao.hasItem(ARABase::calcHash(no_src, no_dst))) < 0)
++	fprintf(stdout, "%lf - recvSaraBANT(%d): received a bant without a route discovered procedure initiated.\n",
++		CURRENT_TIME, getNodeAddr());
++      else{
++          ((SARASession *)sessao[idx])->activo = false; // change the route discovered procedure to inactive: ends
++          fprintf(stdout, "Agents sent: %d\n", ((SARASession *)sessao[idx])->count+1);
++          fprintf(stdout, "Time spend: %lf\n", fant_ses->endTime);
++          fprintf(stdout, "#Path     #Pkt  #Hops\n");
++          for(int  i = 0; i < caminho.getSize(); i++){
++              fprintf(stdout, "%-10d%-6d%d\n",
++                      i+1, 
++                      ((ARAPath *)caminho[i])->getNumAnts(),
++                      ((ARAPath *)caminho[i])->getNumHops());
++          }
++      }
++#endif
++    }
++
++    // the source node start to send the packet saved in temporary queue
++    sendQueuePkt(sh->sara_dst());
++  }
++  else{
++    // this is a passage node, checks for the shortes path
++    if((idx = rt.hasItem((double)no_src)) >= 0){ 
++      no_seg = ((SARA_RT *)rt[idx])->getCaminhoMaisCurtoParaDst();
++      if(no_seg < 0){		// route table error
++	if(((SARA_RT *)rt[idx])->getNrRotas() == 0)
++	  rt.deleteItem(idx);
++	fprintf(stdout, "%lf - recvSaraBANT(%d) - ERROR: don't know to reach the source node [%d] <RT yes, NGH no>.\n",
++		CURRENT_TIME, getNodeAddr(), no_src);
++	return;
++      }
++    }
++    else{				// don't know where is the source node
++      fprintf(stdout, "%lf - recvSaraBANT(%d) - ERRO: don't know to reach the source node [%d] <RT no>.\n",
++	      CURRENT_TIME, getNodeAddr(), no_src);
++      return;			// termino a funcao
++    }
++
++    args.sn   = bant_id;
++    args.src  = no_src;
++    args.dst  = no_dst;
++    args.next = no_seg;
++    args.nhops= nhops;
++    args.pid  = ARAAlg::hash(MAX_PRIME, (getNodeAddr()+1), sh->pid);
++    args.flags= 0;
++    sendSaraPkt(SARA_BANT, args);
++    sendQueuePkt(no_dst);
++  }
++}
++
++
++
++void
++Sara::recvSaraRFANT(Packet *p)
++{
++  SARANeighbor *sngh;
++  SARASeqNum *fant_ses;
++  SARA_RT *sRt, *dRt;
++  struct hdr_sara *sh = HDR_SARA(p);
++  args_t args;
++  nsaddr_t local, no_ant, no_src, no_dst, no_seg;
++  int fant_id, shops, dhops;
++  int fant_idx, rt_idx, ngh_idx;
++  int rpr_idx;
++  int dminhops = -1, sminhops = -1;
++  double st;
++
++
++  local  = getNodeAddr();
++  no_src = sh->sara_src();
++  no_dst = sh->sara_dst();
++  no_ant = sh->sara_prev();
++  no_seg = sh->sara_nxt();
++  shops  = sh->numhop;
++  dhops  = sh->dnumhop;
++  fant_id= sh->seq_num;
++  st = CURRENT_TIME;
++  
++  if(local != no_ant){
++    if((ngh_idx = ngh.hasItem((double)no_ant)) < 0){
++      sngh = addVizinho(no_ant);
++    }
++    else{
++      sngh = (SARANeighbor *)ngh[ngh_idx];
++      assert(sngh);
++    }
++    sngh->resetState(delta);
++  }
++
++  // check if the fant passed through here
++  if((fant_idx = fant.hasItem(ARABase::calcHash(no_src, no_dst))) < 0){
++    fant_ses = new SARASeqNum(no_src, no_dst);
++    assert(fant_ses);
++    fant.add(fant_ses);
++  }
++  else{
++    fant_ses = (SARASeqNum *)fant[fant_idx];
++    assert(fant_ses);
++  }
++
++  // if the RFANT already pass through this node
++  if(fant_ses->hasFANT(fant_id) && local != no_dst)
++    return;			// don't forward again
++
++  fant_ses->addHop(fant_id, no_ant, shops, SARASeqNum::INFO_DST);
++  fant_ses->setFantState(fant_id, SARASeqNum::FANT_CONF);
++
++  if(local != no_src)
++    actualizarRT(no_ant, no_src, no_dst, shops, sngh, ART_CTL_FLAG);
++  else
++    return;
++
++  // check if this is the destination node or is in the neighborhood
++  if(local == no_dst || ngh.hasItem((double)no_dst) >= 0){
++#ifdef DEBUG_SARA
++      fprintf(stdout, "%lf - recvSaraRFANT(%d): know how to repair the path %d --> %d.\n",
++              CURRENT_TIME, local, no_src, no_dst);
++#endif
++      if((rpr_idx = reparar.hasItem(ARABase::calcHash(no_dst, no_src))) >= 0){
++          // this is the node from the other side of the broken link
++          ((SARASession *)reparar[rpr_idx])->activo = false;
++      }
++      // send the RBANT backwards
++      args.sn    = fant_id;
++      args.src   = no_src;
++      args.dst   = no_dst;
++      args.next  = no_ant;
++      args.nhops = local == no_dst ? 0 : 1;
++      args.ttl   = sh->ttl;
++      sendSaraPkt(SARA_RBANT, args);
++      return;
++  }
++  
++  if((u_int32_t)no_seg != IP_BROADCAST &&
++     no_seg == local && getMinSaltosPDestino(no_dst) != NETWORK_DIAMETER){
++#ifdef DEBUG_SARA
++      fprintf(stdout, "%lf - recvSaraRFANT(%d): know how to repair the path %d --> %d.\n",
++              CURRENT_TIME, local, no_src, no_dst);
++#endif
++      if((rpr_idx = reparar.hasItem(ARABase::calcHash(no_dst, no_src))) >= 0){
++          ((SARASession *)reparar[rpr_idx])->activo = false;
++      }
++      
++      // send the RBANT backwards
++      args.sn    = fant_id;
++      args.src   = no_src;
++      args.dst   = no_dst;
++      args.next  = no_ant;
++      args.nhops = getMinSaltosPDestino(no_dst);
++      args.ttl   = sh->ttl;
++      sendSaraPkt(SARA_RBANT, args);
++      return;
++  }
++  
++  // if the node can't repair the path, forward the RFANT
++  rt_idx = rt.hasItem((double)no_dst);
++
++  if(rt_idx < 0 ||
++     ((SARA_RT *)rt[rt_idx])->getSituacao() != SARA_RT::ACTIVO ||
++     ((SARA_RT *)rt[rt_idx])->getEstado() == SARA_RT::DELE){
++      if(sh->ttl < bcast_limit){
++          args.sn    = fant_id;
++          args.src   = no_src;
++          args.dst   = no_dst;
++          args.next  = no_seg;
++          args.nhops = shops;
++          args.dhops = dhops;
++          args.ttl   = sh->ttl;
++          sendSaraPkt(SARA_RFANT, args);
++      }
++#ifdef DEBUG_SARA
++      else{
++          fprintf(stdout, "%lf - recvSaraRFANT(%d): reach RFANT limit transmissions %d --> %d\n",
++                  CURRENT_TIME, local, no_src, no_dst);
++      }
++#endif
++      return;
++  }
++  else{
++      dRt = (SARA_RT *)rt[rt_idx];
++      assert(dRt);		
++      if(dRt->hasCaminho(no_ant) >= 0) 
++          return;		
++      
++      // check if route is stil valid
++      if(dRt->getSituacao() != SARA_RT::ACTIVO ||
++         dRt->getEstado() == SARA_RT::DELE)
++          
++          // check the distances
++          dminhops = dRt->getSaltos();
++      if((rt_idx = rt.hasItem((double)no_src)) >= 0){
++          sRt = (SARA_RT *)rt[rt_idx];
++          assert(sRt);
++          sminhops = sRt->getSaltos();
++      }
++      
++      if(sminhops > 0 && sminhops < shops-sh->ttl) // if the RFANT is closing the source node
++          return;			// don't forward the RFANT
++      
++      if(local == no_dst || 
++         (dminhops > 0 && dminhops <= dhops && dhops != NETWORK_DIAMETER &&// closer to destination node
++          sminhops > 0 && sminhops >= shops-sh->ttl)){ // go away the source node
++          if((rpr_idx = reparar.hasItem(ARABase::calcHash(no_dst, no_src))) >= 0){
++              ((SARASession *)reparar[rpr_idx])->activo = false;
++          }
++          // send RBANT backwards
++          args.sn    = fant_id;
++          args.src   = no_src;
++          args.dst   = no_dst;
++          args.next  = no_ant;
++          args.nhops = dminhops < 0 ? 0 : dminhops;
++          args.ttl   = sh->ttl;
++          sendSaraPkt(SARA_RBANT, args);
++          return;
++      }
++      
++      // not a valid path
++      if(sh->ttl < bcast_limit){
++          // forward the RFANT
++          args.sn    = fant_id;
++          args.src   = no_src;
++          args.dst   = no_dst;
++          args.next  = no_seg;
++          args.nhops = shops;
++          args.dhops = dhops;
++          args.ttl   = sh->ttl;
++          sendSaraPkt(SARA_RFANT, args);
++      }
++#ifdef DEGUB_SARA
++      else{
++          fprintf(stdout, "%lf - recvSaraRFANT(%d): reach RFANT transmition limit of %d --> %d\n",
++                  CURRENT_TIME, local, no_src, no_dst);
++      }
++#endif
++  }
++}
++
++
++void
++Sara::recvSaraRBANT(Packet *p)
++{
++  struct hdr_sara *sh = HDR_SARA(p);
++  SARASeqNum *fant_ses;
++  SARANeighbor *sngh;
++  nsaddr_t local, no_src, no_dst, no_ant;
++  args_t args;
++  int fant_id, fant_idx;
++  int ngh_idx, rrpr_idx;
++  int dhops;
++  double st;
++
++  local  = getNodeAddr();
++  no_src = sh->sara_src();
++  no_dst = sh->sara_dst();
++  no_ant = sh->sara_prev();
++  fant_id= sh->seq_num;
++  dhops  = sh->numhop;
++  st     = CURRENT_TIME;
++
++  if((ngh_idx = ngh.hasItem((double)no_ant)) < 0){
++    sngh = addVizinho(no_ant);
++  }
++  else{
++    sngh = (SARANeighbor *)ngh[ngh_idx];
++    assert(sngh);
++  }
++  sngh->resetState(delta);
++  actualizarRT(no_ant, no_dst, no_src, dhops, sngh, ART_RPR_FLAG);
++
++  if((fant_idx = fant.hasItem(ARABase::calcHash(no_src, no_dst))) < 0){
++    fprintf(stdout, "%lf - recvSaraRBANT(%d): received a RBANT from session %d --> %d, but the node didn't receive the RFANT.\n",
++	    CURRENT_TIME, local, no_src, no_dst);
++    return;
++  }
++  else{
++    fant_ses = (SARASeqNum *)fant[fant_idx];
++    assert(fant_ses);
++  }
++  fant_ses->setFantState(fant_id, SARASeqNum::FANT_CONF);
++
++  rrpr_idx = reparar.hasItem(ARABase::calcHash(no_src, no_dst));
++  if(!sh->ttl || rrpr_idx >= 0){
++    fant_ses->endTime = CURRENT_TIME - fant_ses->startTime;
++    if(rrpr_idx >= 0 && ((SARASession *)reparar[rrpr_idx])->activo){
++      fprintf(stdout, "%lf - recvSaraRBANT(%d)\n", CURRENT_TIME, local);
++      fprintf(stdout, "Path repaired by [%d] for session: %d --> %d[%d].\n",
++	      no_ant, no_src, no_dst, dhops);
++      fprintf(stdout, "Required time: %lf\n", fant_ses->endTime);
++    }
++    if(rrpr_idx >= 0) ((SARASession *)reparar[rrpr_idx])->activo = false;
++  }
++  else{				// backward the RBANT
++    // the node can received several RBANT but just backward one
++    if(!fant_ses->hasBANT(fant_id)){
++      fant_ses->setBANT(fant_id);
++    }
++    else{
++#ifdef DEBUG_SARA
++      fprintf(stdout, "%lf - recvSaraRBANT(%d): received another RBANT - %d --> %d.\n",
++	      CURRENT_TIME, local, no_src, no_dst);
++#endif
++      return;
++    }
++
++    int fh = fant_ses->getFirstHop(fant_id);
++
++    if(fh < 0){
++      fprintf(stdout,"%lf - recvSaraRBANT(%d): can't backward the RBANT.\n",
++	      CURRENT_TIME, local);
++      return;
++    }
++
++    args.sn    = fant_id;
++    args.src   = no_src;
++    args.dst   = no_dst;
++    args.next  = fh;
++    args.nhops = dhops;
++    args.ttl   = sh->ttl;
++    sendSaraPkt(SARA_RBANT, args);
++  }
++
++  sendQueuePkt(no_dst);
++}
++
++
++
++/*
++ * resetSaraNghTimer(): reschedule an event for next time
++ *
++ * IN:
++ *   NIL
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia
++ * date: May06
++ */
++void
++Sara::resetSaraNghTimer()
++{
++  SARANeighbor *vizinho;
++  int i = 0;
++  nsaddr_t addr;
++  bool apagar = false;
++  args_t args;
++  double st;
++
++  addr = getNodeAddr();
++  st = CURRENT_TIME;
++
++  // check if is the right time to send an hello packet
++  if(next_hello < st){
++    args.sn   = 0;
++    args.src  = addr;
++    args.dst  = IP_BROADCAST;
++    args.rumo = getRumo();
++    args.prev = addr;
++    args.velocidade = getVelocidade();
++    args.latitude   = getLatitude();
++    args.longitude  = getLongitude();
++
++    if(gps == 1) // the HELLO msg is only transmited if gps = 1
++      sendSaraPkt(SARA_HELLO, args);
++    next_hello += hello_int;
++  }
++  
++
++  // check if there are neighbors just went away
++  while(i < ngh.getSize()){
++    vizinho = (SARANeighbor *)ngh[i];
++    if(!God::instance()->IsNeighbor(addr, vizinho->getEndereco())){
++#ifdef DEBUG_SARA
++          fprintf(stdout, " %lf - resetSaraNeighbor(%d) - neighbor [%d] deleted.\n",
++                  st, addr, vizinho->getEndereco());
++#endif
++          deleteBrokenLink(vizinho->getEndereco());
++          apagar = true;
++          continue;
++    }
++    i++;
++  }
++
++  // clean the route table for those nodes which aren't in the neighbourhood
++  if(apagar) cleanRT();			
++
++  // verifica quem entrou na vizinhanca
++  int idx;
++  for(i = 0; i < God::instance()->nodes(); i++){
++      idx = ngh.hasItem((double)i);
++    if(i != addr && idx < 0 &&
++       God::instance()->IsNeighbor(addr, i)){
++      addVizinho(i);
++    }
++    else if(i != addr &&
++            idx >= 0 &&
++            God::instance()->IsNeighbor(addr, i) &&
++            ((SARANeighbor *)ngh[idx])->getState() == SARANeighbor::IDLE){
++        vizinho = (SARANeighbor *)ngh[idx];
++        vizinho->setState(SARANeighbor::ON);
++    }
++  }
++
++  // calculate the route table size - for statistical information only
++  rt.setMaxSizeList();
++  int total_caminhos = 0;
++  for(i = 0; i < rt.getSize(); i++)
++    total_caminhos += ((SARA_RT *)rt[i])->getNrRotas();
++  rt.setTotalSizeLists(total_caminhos);
++
++  ngh_timer_.resched(1.0); // reschedule for Xsec
++}
++
++
++
++/*
++ * resetSaraRvGPSTimer(): sets for the next event
++ *
++ * IN: NIL
++ * OUT: NIL
++ * 
++ * autor: Fernando Correia; data: Out07
++ */
++void
++Sara::resetSaraRvGPSTimer()
++{
++  rv_gps_timer_.resched(GPS_INT);	// next event: 500ms
++}
++
++
++
++/*
++ * resetSaraPathTimer():
++ * check if the route discovery procedure is still active. In is active, it means that no BANT
++ * arrived at the source node, so send another FANT to the network.
++ * when all route discovery procedures are finish , this timer stops
++ *
++ * IN: OUT: NIL
++ *
++ * autor: Fernando Correia; data Nov2007
++ */
++void
++Sara::resetSaraPathTimer()
++{
++  SARASession *ses;
++  SARASeqNum  *fant_ses;
++  int idx_fant, idx_ses = 0;
++  bool resultado = false;
++  nsaddr_t local;
++  double st;
++
++  local = getNodeAddr();
++  st = CURRENT_TIME;
++
++  if(sessao.getSize() == 0)	// there are np active route discovery procedures
++    return;			
++
++  while(idx_ses < sessao.getSize()){
++    ses = (SARASession *)sessao[idx_ses];
++    assert(ses);
++    if(ses->activo == false){ // the route discovery procedure is finish
++#ifdef DEBUG_SARA
++      fprintf(stdout, "%lf - resetSaraPathTimer(%d): the route from %d --> %d is discovered.\n",
++	      CURRENT_TIME, getNodeAddr(), ses->getSrc(), ses->getDst());
++#endif
++    }
++    else if(ses->count > 9){	// count the number of FANT the source node already sent to the network
++                                // if is greater than 9, it means that is not possible to discover the route
++      fprintf(stdout, "%lf - resetSaraPathTimer(%d): it is not possible to discover a route to --> %d\n",
++	      CURRENT_TIME, getNodeAddr(), ses->getDst());
++      Packet *p = rqueue.deque(ses->getSrc(), ses->getDst());
++      while(p != NULL){
++	drop(p, DROP_RTR_NO_ROUTE);
++	p = rqueue.deque(ses->getSrc(), ses->getDst());
++      }
++      sessao.deleteItem(idx_ses);// delete the route discovery sesson from the list
++      continue;			 // continue to the next item in the list, if available
++    }
++    else if(ses->next_time <= CURRENT_TIME){ // it is the time to send another FANT
++      ses->count++;
++      ses->next_time = CURRENT_TIME+rd_int;
++      idx_fant = fant.hasItem(ARABase::calcHash(getNodeAddr(), ses->getDst()));
++      assert(idx_fant >= 0);
++      fant_ses = (SARASeqNum *)fant[idx_fant];
++      assert(fant_ses);
++      fant_ses->seq_num = (++fant_ses->seq_num % MAXSN);
++      sendFANTPkt(getNodeAddr(), ses->getDst());
++      resultado = true;
++    }
++    else
++      resultado = true;
++    idx_ses++;			// advance to the next item in the list
++  }
++
++  if(resultado){	        // if the sessao list stil has elements, re-sets the timer
++    path_timer_.resched(SARA_CAMINHO_CONF);
++  } 
++
++}
++
++
++/*
++ * resetSaraFantTimer():
++ * this timer is reponsible to initiate the FANT confirmation check procedure
++ * for each unconfirmed FANT, the node must transmit another copy of the FANT
++ *
++ * autor: Fernando Correia; data: Nov2007
++ */
++void
++Sara::resetSaraFantTimer()
++{
++  if(fant.getSize() == 0)
++    return;
++
++  SARASeqNum *fant_ses;
++  bool activar = false;
++  int fant_counter = 0;
++  int nhops_to_src;
++  int idx_rt;
++  double st;
++  nsaddr_t addr;
++  nsaddr_t src, dst;
++
++  addr = getNodeAddr();
++  st = CURRENT_TIME;
++
++  // for each FANT processed by this node, verify which are those unconfirmed
++  for(int i = 0; i < fant.getSize(); i++){
++    fant_ses = (SARASeqNum *)fant[i];
++    src = fant_ses->s;
++    dst = fant_ses->d;
++
++    if(!fant_ses->getCounter()){// all FANTs were confirmed already
++      continue;
++    }
++
++    for(int j = 0; j < MAXSN && fant_counter < fant_ses->getCounter(); j++){
++      if(fant_ses->getFantState(j) == SARASeqNum::FANT_NCONF){ // for each unconfirmed FANT, tries to transmit another copy
++	// checks if the route to the source node is still valid
++	if(fant_ses->s == addr)
++	  nhops_to_src = 0;
++	else if((idx_rt = rt.hasItem((double)fant_ses->s)) < 0){
++	  fprintf(stdout, "%lf - resetSaraFantTimer(%d): No valid route to the source node (%d).\n",
++		  CURRENT_TIME, getNodeAddr(), fant_ses->s);
++	  fant_ses->setFantState(j, SARASeqNum::FANT_CONF);
++	  continue;
++	}
++	else
++	  nhops_to_src = ((SARA_RT *)rt[idx_rt])->getSaltos();
++	
++	fant_counter++; 
++	if(fant_ses->fant[j].conf_time <= CURRENT_TIME){
++	  sendFANTPkt(fant_ses, j, nhops_to_src);  // transmit the FANT
++	  if(fant_ses->fant[j].counter > 2){       // if already sent two copys of the FANT
++	    fant_ses->setFantState(j, SARASeqNum::FANT_CONF);  // give up, don't send any more
++	    fant_counter--;
++	    fprintf(stdout, "%lf - resetSaraFantTimer(%d): %d --> %d, fant_id=%d was sent 3 times.\n",
++		    CURRENT_TIME, getNodeAddr(), fant_ses->s, fant_ses->d, j);
++	  }
++	  else{
++	    activar = true;
++#ifdef DEBUG_SARA
++	    fprintf(stdout, "%lf - resetSaraFantTimer(%d): FANT [%d] transmitted, for session %d --> %d.\n",
++		    CURRENT_TIME, getNodeAddr(), j, fant_ses->s, fant_ses->d);
++#endif
++	  }
++	}
++	else
++	  activar = true;
++      }
++    }
++  }
++
++  if(activar) // re-schedule the timer
++    fant_timer_.resched(SARA_FANT_CONF);
++}
++
++
++
++/* resetSaraRRPRTimer():
++ * this timer is responsible to control the route repair time.
++ * when the timer ends two things could happen:
++ * 1 - the router was repaired and the timer must be stoped
++ * 2 - the route wasn't repaired and a route repair message is sent to the source node
++ */
++void
++Sara::resetSaraRRPRTimer()
++{
++  SARASession *rep_proc;
++  nsaddr_t local;
++  nsaddr_t no_seg;
++  args_t args;
++  int idx_ses = 0;
++  int idx_rt, idx_fant;
++  bool resultado = false;
++  double st;
++
++  local = getNodeAddr();
++  st = CURRENT_TIME;
++  if(reparar.getSize() == 0)	// there are no route repair procedures active
++    return;
++
++  while(idx_ses < reparar.getSize()){
++    rep_proc = (SARASession *)reparar[idx_ses];
++    assert(rep_proc);
++    args.src = rep_proc->getSrc();
++    args.dst = rep_proc->getDst();
++
++#ifdef DEBUG_SARA
++    fprintf(stdout, "%lf - resetSaraRRPRTimer(%d): session %d --> %d, state = %s, nxt_time = %lf\n",
++	    st, local, args.src, args.dst, (rep_proc->activo ? "TRUE" : "FALSE"), rep_proc->next_time);
++#endif
++    
++    if(rep_proc->activo == false){ // the repair procedure already finished
++      reparar.deleteItem(idx_ses);
++      continue;
++    }
++
++    if(rep_proc->next_time > CURRENT_TIME){ // the repair procedure stil have time
++      resultado = true;
++      idx_ses++;
++      continue;
++    }
++    
++    reparar.deleteItem(idx_ses);
++    if((idx_rt = rt.hasItem((double)args.dst)) >= 0) // if I have a route to destination node
++      rt.deleteItem(idx_rt);	// that is not a valid route, delete it
++    no_seg = findNextNode(args.dst, args.src, getNodeAddr());
++    if(no_seg < 0 && (idx_rt = rt.hasItem((double)args.src)) >= 0){
++      rt.deleteItem(idx_rt);
++      continue;
++    }
++
++    // send to the source node an error message
++    args.next  = no_seg;
++    args.flags = bit2;
++    rep_proc->count++;
++    idx_ses++;
++    if((idx_fant = fant.hasItem(ARABase::calcHash(args.src, args.dst))) >= 0)
++      fant.deleteItem(idx_fant);
++
++    fprintf(stdout, "\troute repair error message to the source node: %d\n", no_seg);
++    sendSaraPkt(SARA_RERR, args);
++  }
++
++  if(resultado)
++    rrpr_timer_.resched(SARA_REPARA_TIMER);
++}
++
++
++
++/* 
++ * calcPosicao(): calculates the node course, speed and "GPS" position
++ *
++ * IN: true - calculate the initial position
++ *     false- calculate the speed course
++ *
++ * OUT: NIL
++ *
++ * autor: Fernando Correia; data: Out07
++ */
++void
++Sara::calcPosicao(bool estado)
++{
++  vector v;
++  double oldLat;
++  double oldLong;
++  double distancia;
++  double x, y;
++  double alfa;
++
++  double st;
++  int localAddr;
++
++  st = CURRENT_TIME;
++  localAddr = getNodeAddr();
++
++  if(estado){		
++    velocidade = 0;
++    rumo = 0;
++    v = God::instance()->getNodeCoord(getNodeAddr());
++    longitude = v.X;
++    latitude  = v.Y;
++    return;
++  }
++
++  if(!estado){		
++    oldLat = latitude;
++    oldLong = longitude;
++    v = God::instance()->getNodeCoord(getNodeAddr());
++    longitude = v.X;
++    latitude  = v.Y;
++    x = longitude - oldLong;
++    y = latitude - oldLat;
++    distancia = sqrt(pow(x, 2.0)+pow(y, 2.0));
++    velocidade = (int)(distancia/GPS_INT);
++    alfa = (x == 0.0) ? 0.0 : acos(x / distancia);
++    if(x >= 0 && y >= 0)	// 1Q
++      alfa = M_PI_2 - alfa;
++    else if(x >= 0 && y < 0)	// 2Q
++      alfa += M_PI_2;
++    else if(x < 0 && y < 0)	// 3Q
++      alfa += M_PI_2;
++    else			// 4Q
++      alfa += 2*M_PI+M_PI_2-alfa ;
++    rumo = (int)(alfa * 360.0 / (2*M_PI));
++
++#ifdef DEBUG_SARA
++    sprintf(logBuffer_->pt_->buffer(),
++	    "*GPS (%f)/[%d] - Course=%d Speed=%d Lat=%lf Long=%lf", 
++	    CURRENT_TIME, getNodeAddr(), rumo, velocidade, latitude, longitude);
++    logBuffer_->pt_->dump();
++#endif
++  }
++}
++
++
++
++/*
++ * getNodeAddr(): returns node address
++ *
++ * IN:
++ *   NIL
++ *
++ * OUT:
++ *   nsaddr_t: node address
++ *
++ * author: Fernando Correia
++ * date: May06
++ */
++nsaddr_t
++Sara::getNodeAddr() const
++{
++  return no_addr;
++}
++
++
++
++
++/*
++ * rt_ll_failed(): this routine is called when link-layer reports a route failure
++ *
++ * author: Fernando Correia; date: Jun06
++ */
++void
++Sara::rt_ll_failed(Packet *p)
++{
++  SARANeighbor    *vizinho;
++  struct hdr_ip   *ih = HDR_IP(p);
++  struct hdr_cmn  *ch = HDR_CMN(p);
++  struct hdr_sara *sh = HDR_SARA(p);
++  nsaddr_t brokenLink = ch->next_hop_;
++  nsaddr_t local, src, dst;
++  int sara_type = sh->sara_type();
++  int rt_idx, ngh_idx;
++  int src_hops, dst_hops;
++  double ntentativas = -1.0;
++  double st;
++
++  local = getNodeAddr();
++  src = ih->saddr();
++  dst = ih->daddr();
++  st = CURRENT_TIME;
++
++  if(ch->ptype() == PT_SARA && 	// when in the presence of a low priority control packet
++     sara_type != SARA_BANT &&	// which are all broadcasted control packets less the BANT
++     sara_type != SARA_RBANT &&
++     sara_type != SARA_RERR){	// drop then
++    drop(p, DROP_RTR_MAC_CALLBACK);
++    return;
++  }
++
++  // check if the route for that destination is already in repair mode
++  if((rt_idx = rt.hasItem((double)dst)) >= 0 &&
++     ((SARA_RT *)rt[rt_idx])->getEstado() != SARA_RT::ACTIVO){
++      if(ch->ptype() == PT_TXCBR){
++          sprintf(logBuffer_->pt_->buffer(), "*D_CBR _%d_", getNodeAddr());
++          logBuffer_->pt_->dump();
++          drop(p, DROP_RTR_NO_ROUTE); // drop the CBR packet
++      }
++      else
++          rqueue.enque(p);
++      return;
++  }
++
++  ch->pid() = 0;		// reset path id, for statistical reasons
++  if((ngh_idx = ngh.hasItem((double)brokenLink)) >= 0){
++      vizinho = (SARANeighbor *)ngh[ngh_idx]; // get the neighbor object
++      ntentativas = vizinho->getNivelErro()-1.0;
++      vizinho->setNivelErro(ntentativas); // update the link level error
++      
++      if(rt_idx >= 0 && ntentativas > 0){
++          if(DATA_PACKET(ch->ptype()))		// link level error is greater than '0'
++              forwardData(p, ARP_DELAY);        // try to use the same link again
++          else{
++              drop(p, DROP_RTR_MAC_CALLBACK);
++              sprintf(logBuffer_->pt_->buffer(), "*D_CBR _%d_", getNodeAddr());
++              logBuffer_->pt_->dump();
++          }
++          return;
++          
++      }
++  }
++
++  // just keep information about the distance to the source and destination nodes
++  src_hops = getMinSaltosPDestino(src);
++  dst_hops = getMinSaltosPDestino(dst);
++
++  // when in the presence of to much error link transmissions, delete that neighbor and route from the lists
++  if(ngh_idx >= 0){
++    deleteBrokenLink(brokenLink);
++    cleanRT();			 
++  }
++
++  // check if there is an alternative route
++  if(findNextNode(src, dst, ch->next_hop_) >= 0){ 
++    forwardData(p, ARP_DELAY);
++    return;
++  }
++
++  // control packets doesn't start the route discovery procedures
++  if(ch->ptype() == PT_SARA){	
++    drop(p, DROP_RTR_MAC_CALLBACK);  // drop the control packet
++    return;
++  }
++
++  // don't have alternative route, if is a data packet (TCP) keep in the temp queue
++  else if(DATA_PACKET(ch->ptype()))
++      rqueue.enque(p);
++
++
++  if(src == getNodeAddr()){ // if this is the source node
++#ifdef DEBUG_ROUTE_SARA
++      fprintf(stdout, "%lf - rt_ll_failed(%d): route discover procedure %d --> %d.\n", CURRENT_TIME, getNodeAddr(), src, dst);
++#endif
++      addRota(dst, SARA_RT::PROC);
++      startRouteDiscovery(dst);
++  }
++  else{
++#ifdef DEBUG_ROUTE_SARA
++    fprintf(stdout, "%lf - rt_ll_failed(%d): route repair procedure %d --> %d.\n",
++	    CURRENT_TIME, getNodeAddr(), src, dst);
++#endif
++    addRota(dst, SARA_RT::REP);
++    startRouteRepair(brokenLink, src, dst, src_hops, dst_hops);
++  }
++}
++
++
++
++
++/*
++ * getRumo()
++ */
++int 
++Sara::getRumo()
++{
++  return rumo;
++}
++
++
++/*
++ * getVelocidade()
++ */
++int
++Sara::getVelocidade()
++{
++  return velocidade;
++}
++
++
++/*
++ * getLatitude()
++ */
++float
++Sara::getLatitude()
++{
++  return latitude;
++}
++
++
++/*
++ * getLongitude()
++ */
++float
++Sara::getLongitude()
++{
++  return longitude;
++}
++
++
++
++/*
++ * rtResolve(): route handling function
++ */
++void
++Sara::rtResolve(Packet *p)
++{
++  struct hdr_cmn *ch = HDR_CMN(p);
++  struct hdr_ip *ih  = HDR_IP(p);
++  int idx;
++  int localAddr;
++  double st;
++  nsaddr_t s,d,a;
++
++  localAddr = getNodeAddr();
++  st = CURRENT_TIME;
++  s = ih->saddr();
++  d = ih->daddr();
++  a = ch->prev_hop_;
++  idx = rt.hasItem((double)d);
++
++  map_sn_t::iterator iter = rd_sn.find(ih->daddr());
++  
++  // checks if the packet is for this node or I knows how to reach the destination node
++  if(ih->daddr() == (nsaddr_t)IP_BROADCAST ||
++     ih->daddr() == here_.addr_ ||
++     findNextNode(ih->saddr(), ih->daddr(), ch->prev_hop_) >= 0){
++      
++      // first time
++      if(iter == rd_sn.end() && localAddr == ih->saddr() && ngh.hasItem((double)d)){
++          rd_sn[ih->daddr()] = 1;
++          sprintf(logBuffer_->pt_->buffer(),
++                  "*TD %lf _%d_ %d -S %d -D %d %lf",
++                  0.01, getNodeAddr(), 1, ih->saddr(), ih->daddr(), st);
++          logBuffer_->pt_->dump();
++      }
++
++      forwardData(p, 0.0);
++    return;
++  }
++
++  // I don't know how to reach the destination node, do something
++  if(iter == rd_sn.end())
++      rd_sn[ih->daddr()] = 1;
++  if(DATA_PACKET(ch->ptype()) || ch->ptype() == PT_TXCBR)
++      rqueue.enque(p); // for TCP keep in the temp queue the packet
++  else
++      drop(p, DROP_RTR_NO_ROUTE); // drop for TxCBR
++    
++
++  // check if there is a route discovery or repair procedure active for that destination
++  if(idx >= 0 && 
++     (((SARA_RT *)rt[idx])->getEstado() == SARA_RT::PROC ||
++      ((SARA_RT *)rt[idx])->getEstado() == SARA_RT::REP)){
++    return;
++  }
++
++  // if I reach here, it means that I don't have information in the route table
++  if(s == getNodeAddr()){ // for the dource node, do:
++    // create an entry in the route table with discovery (PROC) information
++    addRota(d, SARA_RT::PROC);
++    startRouteDiscovery(d);
++  }
++  else{  // this is a path node
++#ifdef DEBUG_SARA
++    fprintf(stdout,"%lf - rtResolve(%d): se cheguei aqui, temos condicao especial.\n",
++	    CURRENT_TIME, getNodeAddr());
++#endif
++    // create an entry in the route table with repair (REP) information
++    addRota(d, SARA_RT::REP);
++    // saves info about the distance to the source and destination nodes
++    int src_hops = getMinSaltosPDestino(s);
++    int dst_hops = getMinSaltosPDestino(d);
++    startRouteRepair(IP_BROADCAST, s, d, src_hops, dst_hops);
++  }
++}
++
++
++
++
++/*
++ * forwardData(): send a data packet for next hop or upper layers
++ *
++ * IN:
++ *   Packet* p: packet o forward
++ *   double delay:
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia
++ * date: May06
++ */
++void
++Sara::forwardData(Packet* p, double delay)
++{
++  struct hdr_cmn *ch = HDR_CMN(p);
++  struct hdr_ip *ih  = HDR_IP(p);
++  ARAPath *tCD;
++  nsaddr_t next_node;
++  int idx, local;
++  double st;
++
++  local = here_.addr_;
++  st = CURRENT_TIME;
++  if(ch->ptype() != PT_SARA && ch->direction() == hdr_cmn::UP &&
++     (ih->daddr() == (nsaddr_t)IP_BROADCAST || ih->daddr() == here_.addr_)){
++      ih->dport() = 0; // in destination node change dport value to 0 (was set to 255 in the source node)
++    // add path id to the path list (for statistical reason only) but only if the packet wasn't broadcasted
++    if(ih->daddr() != (nsaddr_t)IP_BROADCAST &&
++       ch->pid() > 0 && 	
++       caminho_dados.hasItem((double)ch->pid()) < 0){
++      tCD = new ARAPath((double)ch->pid(), 0);
++      assert(tCD);
++      caminho_dados.add(tCD);
++    }
++
++    if(ih->daddr() == here_.addr_){ // this is the destination node, check for a discovery procedure
++      if((idx = sessao.hasItem(ARABase::calcHash(ih->daddr(), ih->saddr()))) >= 0)
++	((SARASession *)sessao[idx])->activo = false; // if exists, update session state
++    }
++
++    demux_->recv(p, 0);
++    return;
++  }
++
++  if(ih->ttl() == 0){
++    drop(p, DROP_RTR_TTL);
++    return;
++  }
++
++  if(ih->daddr() != (nsaddr_t)IP_BROADCAST){
++    next_node = findNextNode(ih->saddr(), ih->daddr(), ch->prev_hop_);
++    if(next_node < 0){
++      fprintf(stdout, " %lf - forwardData(%d): error I don't know how to reach the destination node [%d].\n",
++	      CURRENT_TIME, getNodeAddr(), ih->daddr());
++      drop(p, DROP_RTR_NO_ROUTE); // drop for TxCBR
++      return;
++    }
++
++    // prepar the common header
++    ch->next_hop_   = next_node;
++    ch->addr_type() = NS_AF_INET;
++    if(ih->saddr() == here_.addr_)
++      ch->pid() = here_.addr_ + 1;
++    else
++      ch->pid() = ARAAlg::hash(MAX_PRIME, (here_.addr_ + 1), ch->pid());
++  }
++  // for broadcast the header info is different
++  else{
++    ch->next_hop_   = IP_BROADCAST;
++    ch->addr_type() = NS_AF_NONE;
++  }
++
++  ch->prev_hop_   = here_.addr_;
++  ch->direction() = hdr_cmn::DOWN;
++  ch->xmit_failure_ = saraFailedCallback;
++  ch->xmit_failure_data_ = (void *)this;
++
++  if(ih->daddr() == (nsaddr_t)IP_BROADCAST)
++    Scheduler::instance().schedule(target_, p, JITTER);
++  else
++    Scheduler::instance().schedule(target_, p, delay);
++}
++
++
++
++
++/*
++ * cleanRT(): clean inactive route information
++ *
++ * IN: NIL
++ * OUT: NIL
++ *
++ * autor: Fernando Correia; data: Out07
++ */
++void
++Sara::cleanRT()
++{
++  int idx = 0;
++  int min_hops;
++  SARA_RT *rotas;
++  nsaddr_t addr;
++  double st;
++
++  st = CURRENT_TIME;
++  addr = getNodeAddr();
++  if(rt.getSize() == 0)		//route table is empty
++    return;
++
++  while(idx < rt.getSize()){
++    rotas = (SARA_RT *)rt[idx];
++    min_hops = rotas->delRotas();
++    if(rotas->getNrRotas() > 0 || 
++       rotas->getEstado() != SARA_RT::ACTIVO){
++      idx++;
++      continue;
++    }
++    rt.deleteItem(idx);
++  }
++}
++
++
++
++SARANeighbor *
++Sara::addVizinho(nsaddr_t node_addr)
++{
++  SARANeighbor* sngh;
++  SARACaminho *caminho;
++  SARA_RT *rota_dst;
++  SARA_Rotas *rota;
++  int idx;
++  nsaddr_t local;
++ 
++  local = getNodeAddr();
++  sngh = new SARANeighbor(node_addr, ph_max_level, log_cbr, nrRetry, ph_valid, taxa_evap, ph_mod);
++  assert(sngh);
++  caminho = sngh->addDestino(node_addr); 
++  ngh.add(sngh);
++  idx = rt.hasItem((double)node_addr);
++  if(idx < 0){
++    rota_dst = addRota(node_addr, SARA_RT::ACTIVO);
++    assert(rota_dst);
++    rota = rota_dst->addRotas(node_addr, sngh, 1);
++    caminho->caminho = rota;
++  }
++  else if(((SARA_RT *)rt[idx])->hasCaminho(node_addr) < 0){
++    ((SARA_RT *)rt[idx])->setEstado(SARA_RT::ACTIVO);
++    rota = ((SARA_RT *)rt[idx])->addRotas(node_addr, sngh, 1);
++    caminho->caminho = rota;
++  }
++
++  return sngh;
++}
++
++
++
++SARA_RT*
++Sara::addRota(nsaddr_t dst, int estado)
++{
++  SARA_RT *rota_dst;
++  int idx;
++
++  if((idx = rt.hasItem((double)dst)) < 0){
++    rota_dst = new SARA_RT(dst);
++    assert(rota_dst);
++    rt.add(rota_dst);
++  }
++  else{
++    rota_dst = (SARA_RT *)rt[idx];
++    assert(rota_dst);
++    rota_dst->setSituacao(SARA_RT::ACTIVO);
++  }
++
++  rota_dst->setEstado(estado);
++
++  return rota_dst;
++}
++
++
++
++void
++Sara::startRouteDiscovery(nsaddr_t dst)
++{
++  SARASession *ses;
++  SARASeqNum  *nova_fant_ses;
++  int idx_ses = sessao.hasItem(ARABase::calcHash(getNodeAddr(), dst));
++  int idx_fant= fant.hasItem(ARABase::calcHash(getNodeAddr(), dst));
++  nsaddr_t local;
++  double st;
++
++  local = getNodeAddr();
++  st = CURRENT_TIME;
++  caminho.deleteAll();
++  count_route_disc++;
++
++  if(idx_ses >= 0)
++    sessao.deleteItem(idx_ses);
++
++  ses = new SARASession(getNodeAddr(), dst);
++  assert(ses);
++  sessao.add(ses);
++
++  ses->next_time = CURRENT_TIME+rd_int;
++  if(idx_fant < 0){
++    nova_fant_ses = new SARASeqNum(getNodeAddr(), dst);
++    assert(nova_fant_ses);
++    fant.add(nova_fant_ses);
++  }
++  else{				
++    nova_fant_ses = (SARASeqNum *)fant[idx_fant];
++    nova_fant_ses->firstTime = true;
++    nova_fant_ses->startTime = CURRENT_TIME;
++    nova_fant_ses->pathFound = false;
++    nova_fant_ses->minHops = 0;
++    nova_fant_ses->seq_num = (++nova_fant_ses->seq_num % MAXSN);
++  }
++
++  if(path_timer_.status() == 0){
++    path_timer_.resched(SARA_CAMINHO_CONF);
++  } 
++
++  sendFANTPkt(getNodeAddr(), dst);
++}
++
++
++
++void
++Sara::startRouteRepair(nsaddr_t nxt, nsaddr_t src, nsaddr_t dst, int saltos_orig, int saltos_dest)
++{
++  int idx_rep = reparar.hasItem(ARABase::calcHash(src, dst));
++  int idx_fant= fant.hasItem(ARABase::calcHash(src, dst));
++  args_t args;
++  nsaddr_t local;
++  SARASession *rs;
++  SARASeqNum *fant_id;
++  double st;
++
++  local = getNodeAddr();
++  st = CURRENT_TIME;
++  count_route_repair++;
++
++  if(idx_rep < 0){
++    rs = new SARASession(src, dst);
++    assert(rs);
++    reparar.add(rs);
++  }
++  else{
++    rs = (SARASession *)reparar[idx_rep];
++  }
++  rs->setStartTime(st);
++  rs->activo = true;
++  rs->next_time = st+rr_int;
++
++  fprintf(stdout, "%lf - startRouteRepair(%d): direction %d[%d] --> %d[%d], extremo --> %d\n",
++	  CURRENT_TIME, getNodeAddr(), src, saltos_orig, dst, saltos_dest, nxt);
++
++  if(idx_fant < 0){
++    fant_id = new SARASeqNum(src, dst);
++    assert(fant_id);
++    fant.add(fant_id);
++  }
++  else{
++    fant_id = (SARASeqNum *)fant[idx_fant];
++    assert(fant_id);
++    fant_id->firstTime = true;
++    fant_id->startTime = CURRENT_TIME;
++    fant_id->pathFound = false;
++    fant_id->seq_num = ++fant_id->seq_num % MAXSN;
++  }
++
++  fant_id->addHop(fant_id->seq_num, src, saltos_orig, SARASeqNum::INFO_DST);
++  fant_id->minHops = saltos_orig;
++
++  args.sn    = fant_id->seq_num;
++  args.src   = src;
++  args.dst   = dst;
++  args.next  = nxt;
++  args.nhops = saltos_orig;
++  args.dhops = saltos_dest;
++  args.ttl   = 0;
++  sendSaraPkt(SARA_RFANT, args);
++
++  if(rrpr_timer_.status() == 0)
++    rrpr_timer_.resched(SARA_REPARA_TIMER);
++}
++
++
++
++
++/*
++ * sendFANTPkt(): this function is for exclusive use of the source node
++ */
++void
++Sara::sendFANTPkt(nsaddr_t s, nsaddr_t d)
++{
++  SARASeqNum *fant_ag;
++  args_t args;
++  int idx_fant;
++  int fant_id;
++
++  idx_fant = fant.hasItem(ARABase::calcHash(s,d));
++  assert(idx_fant >= 0);
++  fant_ag = (SARASeqNum *)fant[idx_fant];    
++  fant_ag->addHop(fant_ag->seq_num, s, 0, SARASeqNum::INFO_DST);
++  fant_id = fant_ag->seq_num;
++  if(!fant_ag->pathFound && fant_id < MAXSN){
++    args.sn    = fant_id;
++    args.src   = s;
++    args.dst   = d;
++    args.prev  = getNodeAddr();
++    args.next  = -1;		// -1 means it must discover a path
++    args.nhops = 0;
++    args.pid   = getNodeAddr()+1;
++    args.antValue = 1;
++    if(sendSaraPkt(SARA_FANT, args)){  // this is the source node and it send the FANT to the network
++        // activate the confirmation procedure
++        fant_ag->setFantState(fant_ag->seq_num, SARASeqNum::FANT_NCONF);
++        fant_ag->fant[fant_id].conf_time = CURRENT_TIME+sd_int;
++        fant_ag->fant[fant_id].counter = 1;
++        fant_ag->incCounter();
++        if(fant_timer_.status() == 0)
++            fant_timer_.resched(SARA_FANT_CONF);
++    }
++    // source node and it is isolated
++    else{
++        fant.deleteItem(idx_fant);
++        fprintf(stdout, "%lf - sendFANTPkt(%d) - source node is isolated.\n",
++                CURRENT_TIME, getNodeAddr());
++    }
++  }
++  else{
++    fprintf(stdout, "%lf - sendFANTPkt(%d) - %s\n", CURRENT_TIME, getNodeAddr(),
++	    (fant_ag->pathFound ? "route already discovered" : "esgotei numero de excced the #FANT transmited"));
++  }
++}
++
++
++
++/*
++ * sendFANTPkt(): this function is for the other nodes and to send unconfirmed FANTs
++ */
++void
++Sara::sendFANTPkt(SARASeqNum *fant_ses, int fant_id, int nhops_to_src)
++{
++  args_t args;
++
++  assert(fant_ses);
++  assert(fant_id >= 0);
++
++  args.sn    = fant_id;
++  args.src   = fant_ses->s;
++  args.dst   = fant_ses->d;
++  args.prev  = getNodeAddr();
++  args.next  = -1;
++  args.nhops = nhops_to_src;
++  args.pid   = getNodeAddr()+1;
++  args.antValue = 1;
++  sendSaraPkt(SARA_FANT, args);
++
++  // activate the FANT confirmation procedure
++  fant_ses->setFantState(fant_id, SARASeqNum::FANT_NCONF);
++  fant_ses->fant[fant_id].conf_time = CURRENT_TIME+sd_int;
++  fant_ses->fant[fant_id].counter++;
++
++  if(fant_timer_.status() == 0)
++    fant_timer_.resched(SARA_FANT_CONF);
++}
++
++
++
++/*
++ * findNextNode()
++ * this function is called by the route discovery procedure only
++ */
++int
++Sara::findNextNode(nsaddr_t s, nsaddr_t d, nsaddr_t p, int fant_id){
++
++  if(!ngh.getSize())
++    return -1;			// o no esta isolado
++
++  double prob[MAX_NGH];		// array de probabilidades
++  int idx_fant;
++  int vezes_usado;
++  SARASeqNum *fant_ses;
++  SARANeighbor *vizinho;
++
++  idx_fant = fant.hasItem(ARABase::calcHash(s, d));
++  assert(idx_fant >= 0);
++  fant_ses = (SARASeqNum *)fant[idx_fant];
++
++  for(int i = 0; i < ngh.getSize(); i++){
++    vizinho = (SARANeighbor *)ngh[i];
++    if(vizinho->getEndereco() == d) // if the destination node is neighbor of this node, return the link for that node
++      return i;
++    // sets each position of the probability array with the number of times that link was choose
++    else if(vizinho->getEndereco() == p || vizinho->getState() == SARANeighbor::IDLE){ // this is link from tha packet came or
++      prob[i] = 0.0;            // the link is de-activated
++      continue;
++    }
++    else if(fant_ses->nodeVisited(vizinho->getEndereco(), fant_id)){
++      prob[i] = 0.0; 		// this neighbor already processed the FANT
++      continue;
++    }
++    vezes_usado = fant_ses->nodeUsed(vizinho->getEndereco());
++    prob[i] = 1.0 / (double)vezes_usado;
++  }
++    
++  int prox_vizinho_idx;
++  double sum;
++
++  sum = ARAAlg::sumArray(prob, ngh.getSize());
++  if(sum < 0.0)
++    prox_vizinho_idx = -1;
++  else{
++      // normalize the array
++      ARAAlg::normalizeDistribution(prob, ngh.getSize());
++      prox_vizinho_idx = ARAAlg::calculateChoice(prob);
++  }
++
++  // return the index on the neighbor link
++  return prox_vizinho_idx;
++}
++
++
++
++/*
++ * findNextNode()
++ * this function is called by forwardData function
++ */
++int
++Sara::findNextNode(nsaddr_t s, nsaddr_t d, nsaddr_t p)
++{
++  nsaddr_t local;
++  double st;
++  int count = 0;
++  
++
++  local = getNodeAddr();
++  st = CURRENT_TIME;
++
++  if(ngh.hasItem((double)d) >= 0)
++    return d;
++
++  int idx = rt.hasItem((double)d);
++  if(idx < 0 || 
++     ((SARA_RT *)rt[idx])->getNrRotas() == 0 ||
++     ((SARA_RT *)rt[idx])->getEstado() != SARA_RT::ACTIVO){
++#ifdef DEBUG_SARA
++    fprintf(stdout, "%lf - findNextNode(%d): I don't have route to the destination node [%d].\n",
++	    CURRENT_TIME, getNodeAddr(), d);
++#endif
++    return -1;
++  }
++
++  SARA_RT *tRT = (SARA_RT *)rt[idx];
++  SARA_Rotas *tRotas;
++  double prob[MAX_NGH];
++  nsaddr_t addr;
++ 
++  for(int i = 0; i < tRT->getNrRotas(); i++){
++    tRotas = tRT->getRota(i);
++    addr = tRotas->getVizinho()->getEndereco();
++    if(addr == p || tRotas->getVizinho()->getState() != SARANeighbor::ON){
++        prob[count++] = 0.0;
++        continue;
++    }
++    switch(metrica){
++    case 0: // just use the hop distance and the pheromone value as metrics
++        prob[count++] = custoDistanciaFeromonas(tRotas->getVizinho(), tRotas);
++      break;
++    }
++  }
++
++  int next_link;
++  double sum;
++
++  sum = ARAAlg::sumArray(prob, count);
++  if(sum < 0.0){
++    return  -1;
++  }
++  else{
++    ARAAlg::normalizeDistribution(prob,  count);
++    next_link = ARAAlg::calculateChoice(prob);
++  }
++
++  return tRT->getRota(next_link)->getVizinho()->getEndereco();
++}
++
++
++void
++Sara::sendQueuePkt(nsaddr_t dst)
++{
++  Packet *buf_pkt;
++  struct hdr_cmn *ch;
++  struct hdr_ip *ih;
++  double delay = ARP_DELAY;
++  nsaddr_t local;
++
++  local = getNodeAddr();
++  while((buf_pkt = rqueue.deque(dst)) != NULL){
++    ch = HDR_CMN(buf_pkt);
++    ih = HDR_IP(buf_pkt);
++    forwardData(buf_pkt, delay);
++    delay += ARP_DELAY;
++  }
++}
++
++
++int
++Sara::actualizarRT(nsaddr_t no_ant, nsaddr_t no_src, nsaddr_t no_dst, 
++		   int nhops, SARANeighbor *vizinho, int flag)
++{
++
++  SARA_RT *nova_rota;
++  SARA_Rotas *rota_vizinho;
++  int idx_rt;
++  int min_hops;
++  nsaddr_t local;
++  double st;
++
++  local = getNodeAddr();
++  st = CURRENT_TIME;
++  
++  // actualizar a RT
++  if((idx_rt = rt.hasItem((double)no_src)) < 0){ // nao tenho entrada na RT
++    // vou criar entrada na RT e fazer as ligacoes a tabela de vizinhos
++    nova_rota = addRota(no_src, SARA_RT::ACTIVO);
++    rota_vizinho = nova_rota->addRotas(no_ant, vizinho, nhops);
++    rota_vizinho->setSaltos(nhops);
++    vizinho->addDestino(no_src)->caminho = rota_vizinho;
++    min_hops = nhops;
++  }
++  // tenho entrada na RT, verifico o caminho
++  else{
++    nova_rota = (SARA_RT *)rt[idx_rt];
++    nova_rota->setEstado(SARA_RT::ACTIVO);
++    if(flag == ART_DATA_FLAG ||	// informacao vinda de um pacote de dados
++       flag == ART_RPR_FLAG){	// informacao vinda da reparacao de caminho
++      if(nova_rota->hasCaminho(no_ant) < 0){ // novo no para o destino
++	rota_vizinho = nova_rota->addRotas(no_ant, vizinho, nhops);
++	vizinho->addDestino(no_src)->caminho = rota_vizinho;
++      }
++      else{
++	rota_vizinho = nova_rota->getCaminho(no_ant);
++      }
++      rota_vizinho->setSaltos(nhops);
++      rota_vizinho->resetTimeStamp();
++      min_hops = nova_rota->getMinHopsToDst();
++    }
++    // se cheguei aqui, entao e actualizar a partir de pacotes de controlo
++    else{
++      min_hops = nova_rota->getMinHopsToDst();
++      if(min_hops == nhops && 	// a distancia e a mesma
++	 nova_rota->hasCaminho(no_ant) < 0){ // e vem por um novo caminho
++	rota_vizinho = nova_rota->addRotas(no_ant, vizinho, nhops);
++	vizinho->addDestino(no_src)->caminho = rota_vizinho;
++	rota_vizinho->setSaltos(nhops);
++      }
++      else if(min_hops == nhops && 	// a distancia e a mesma
++	 nova_rota->hasCaminho(no_ant) >= 0){ // e vem por um novo caminhoe o caminho existe
++	rota_vizinho = nova_rota->getCaminho(no_ant);
++        rota_vizinho->resetTimeStamp();
++        rota_vizinho->setSaltos(nhops);
++      }
++      else if(min_hops > nhops ||
++	      getNodeAddr() == no_dst){ // encontrei um caminho mais curto
++	nova_rota->delRota(nhops); // apaga as rotas maiores
++	rota_vizinho = nova_rota->addRotas(no_ant, vizinho, nhops); // acrescenta a nova rota
++	vizinho->addDestino(no_src)->caminho = rota_vizinho;
++	min_hops = nova_rota->getMinHopsToDst();
++      }
++    }
++    nova_rota->delRota(CURRENT_TIME);
++  }
++
++  return min_hops;
++}
++
++
++
++double
++Sara::custoDistanciaFeromonas(SARANeighbor *sngh, SARA_Rotas *tRotas)
++{
++  double ph, hop;
++  double res;
++
++  assert(sngh);
++
++  ph = sngh->getState() == SARANeighbor::IDLE ? 0.0 : sngh->getFeromona()+1;
++  hop = tRotas->getSaltos();
++  res = pow(ph, F)/exp(hop);
++
++  return res;
++
++}
++
++
++
++void
++Sara::actualizarFeromona(SARANeighbor *sngh)
++{
++
++  assert(sngh);
++  sngh->updateFeromona();
++  sngh->resetState(delta);
++}
++
++
++
++void
++Sara::displayRT()
++{
++  SARA_RT *tmp;
++  int i = 0;
++
++  fprintf(stdout, "%lf - displayRT(%d):\n", CURRENT_TIME, getNodeAddr());
++  while(i < rt.getSize()){
++    tmp = (SARA_RT *)rt[i];
++    tmp->display();
++    i++;
++  }
++}
++
++
++
++void
++Sara::deleteBrokenLink(nsaddr_t addr)
++{
++  SARANeighbor *vizinho;
++  int idx;
++
++  if((idx = ngh.hasItem((double)addr)) >= 0){
++    vizinho = (SARANeighbor *)ngh[idx];
++    vizinho->deleteCaminhos();
++    ngh.deleteItem(idx);
++  }
++}
++
++
++
++int
++Sara::getMinSaltosPDestino(nsaddr_t addr)
++{
++  int idx;
++  int resultado;
++
++  if(getNodeAddr() == addr)
++    resultado = 0;
++  else if((idx = rt.hasItem((double)addr)) < 0)
++    resultado = NETWORK_DIAMETER;
++  else
++    resultado = ((SARA_RT*)rt[idx])->getSaltos();
++
++  return resultado;
++}
++
++
++
++void
++Sara::addSN(Packet *p)
++{
++    struct hdr_cmn* ch = HDR_CMN(p); // ant header
++    struct hdr_ip* ih  = HDR_IP(p);  // ip header
++    nsaddr_t local, dst;
++    int *aux;
++
++    local = getNodeAddr();
++    dst   = ih->daddr();
++    
++    map_sn_t::iterator iter = next_sn.find(dst);
++
++    if(iter == next_sn.end()){  // empty map
++        ch->psn_ = 1;           // packet serial number
++        next_sn[dst] = 1;
++    }
++    else{
++        aux = &((*iter).second);
++        (*aux)++;
++        ch->psn_ = *aux;
++    }
++}
++
++
++
++/*
++ * getSN(): check the arrival packet sequence. When the packet arrive in order, the function writes
++ * in the trace file a OK msg, if not writes a KO msg.
++ * This is used for statistical information only
++ */
++void
++Sara::getSN(Packet *p)
++{
++    struct hdr_cmn* ch = HDR_CMN(p); // ant header
++    struct hdr_ip*  ih = HDR_IP(p);        // ip header
++    nsaddr_t local, src;
++    int rsn, *esn;
++
++    local = getNodeAddr();
++    src   = ih->saddr();
++    rsn   = ch->psn_;
++
++    map_sn_t::iterator iterESN = expc_sn.find(src);
++
++    if(iterESN == expc_sn.end()){  // first time
++        expc_sn[src] = rsn+1;   // keep this occurrence
++        // write a OK msg
++        sprintf(logBuffer_->pt_->buffer(), "*MSG _%d_ %d %d OK %lf", addr(), src, rsn, CURRENT_TIME);
++        logBuffer_->pt_->dump();
++
++    }
++    else{                      
++        esn = &((*iterESN).second);
++        if(rsn >= *esn){        // received the SN provided
++            if(rsn == *esn)
++                // with *esn == rsn write msg OK
++                sprintf(logBuffer_->pt_->buffer(), "*MSG _%d_ %d %d OK %lf", addr(), src, rsn, CURRENT_TIME);
++            else
++                // with *esn > rsn write msg KO
++                sprintf(logBuffer_->pt_->buffer(), "*MSG _%d_ %d %d KO %lf", addr(), src, rsn, CURRENT_TIME);
++            logBuffer_->pt_->dump();
++            *esn = rsn+1;       // saves the next expected serial number
++        }
++        else{
++            // write msg KO
++            sprintf(logBuffer_->pt_->buffer(), "*MSG _%d_ %d %d KO %lf", addr(), src, rsn, CURRENT_TIME);
++            logBuffer_->pt_->dump();
++            }
++    }
++}
++                
+diff -Naur ns-2.34-orig/sara/sara.h ns-2.34/sara/sara.h
+--- ns-2.34-orig/sara/sara.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/sara/sara.h	2015-02-22 22:29:41.016736684 +0100
+@@ -0,0 +1,303 @@
++#ifndef _SARA_H
++#define _SARA_H
++
++#include <god.h>
++#include <time.h>
++#include <math.h>
++#include <stdlib.h>
++#include <assert.h>
++#include <stdio.h>
++#include <map>
++
++#include <agent.h>
++#include <packet.h>
++#include <cmu-trace.h>
++#include <timer-handler.h>
++#include <random.h>
++#include <priqueue.h>
++#include <classifier-port.h>
++
++#include <ara/ara_base.h>
++#include <ara/ara_vector.h>
++#include <ara/ara_rqueue.h>
++#include <ara/ara_alg.h>
++#include <ara/ara_path.h>
++#include <sara/sara_session.h>
++#include <sara/sara_pkt.h>
++#include <sara/sara_ngh.h>
++#include <sara/sara_rt.h>
++#include <sara/sara_seqnum.h>
++
++#include <tx_cbr/tx_cbr.h>
++
++#define  JITTER         (Random::uniform()*0.005)
++#define  MAX_NGH 256            /* max number of neighbors */
++#define  FORWARD_DATA 9999      /* reference sequence number to forward data packets */
++#define  UPD_PH_DATA  -1
++#define  UPD_PH_PATH  -2
++#define  GPS_INT 1.0
++#define  HELLO_INT 15.0
++#define  ART_DATA_FLAG 1
++#define  ART_CTL_FLAG  2
++#define  ART_RPR_FLAG  3
++
++/* typedefs */
++typedef std::map<nsaddr_t, int>  map_sn_t;
++
++typedef struct _args{
++  int sn;
++  nsaddr_t src;
++  nsaddr_t dst;
++  nsaddr_t prev;
++  nsaddr_t next;
++  int rumo;
++  int velocidade;
++  float latitude;
++  float longitude;
++  int flags;
++  int id;
++  int pid;
++  int antValue; 
++  int nhops;
++  int dhops;
++  int ttl;
++}args_t;
++
++
++class Sara;                      /* forward declaration */
++
++/* Timers */
++
++    
++/*
++ * class Sara_RV_GPS:
++ * Timer to initiate the Coarse/Speed calculus
++ *
++ * autor: Fernando Correia
++ * data: Out07
++ */
++class SaraRvGPSTimer : public TimerHandler {
++public:
++    SaraRvGPSTimer(Sara *agent) : TimerHandler() {
++        agent_ = agent;
++    }
++    
++protected:
++    Sara *agent_;
++    
++    virtual void expire(Event* e);
++};
++
++
++/*
++ * class Sara_NghTimer: send discovery packet to 1-hop distance
++ * to find which are the node neighbours
++ *
++ * author: Fernando Correia / IST
++ * data: 29Abr06
++ */
++class SaraNghTimer : public TimerHandler {
++ public:
++  SaraNghTimer(Sara* agent) : TimerHandler() {
++    agent_ = agent;
++  }
++
++ protected:
++  Sara* agent_;
++
++  virtual void expire(Event* e);
++};
++
++
++
++/*
++ * class SaraPathTimer(): Tx A FANT to the network
++ *
++ * autor: Fernando Correia / IST
++ * data: Nov07
++ */
++class SaraPathTimer : public TimerHandler {
++ public:
++  SaraPathTimer(Sara *agent) : TimerHandler() {
++    agent_ = agent;
++  }
++
++ protected:
++  Sara* agent_;
++
++  virtual void expire(Event* e);
++};
++
++
++
++/*
++ * class SaraFANTTimer(): re-Tx the FANT
++ *
++ * autor: Fernando Correia / IST
++ * data: Nov07
++ */
++class SaraFANTTimer : public TimerHandler {
++ public:
++  SaraFANTTimer(Sara *agent) : TimerHandler() {
++    agent_ = agent;
++  }
++
++ protected:
++  Sara* agent_;
++
++  virtual void expire(Event* e);
++};
++
++
++
++
++/*
++ * class SaraRRPRTimer(): route repair RFANT timer
++ *
++ * autor: Fernando Correia / IST
++ * data: Nov07
++ */
++class SaraRRPRTimer : public TimerHandler {
++ public:
++  SaraRRPRTimer(Sara *agent) : TimerHandler() {
++    agent_ = agent;
++  }
++
++ protected:
++  Sara* agent_;
++
++  virtual void expire(Event* e);
++};
++
++
++
++
++/* Agent */
++/*
++ * class Sara: agent for Ant Routing Algorithm
++ *
++ * author: Fernando Correia / IST
++ * data: 29Abr06
++ */
++class Sara : public Agent {
++
++    friend class SaraNghTimer;
++    friend class SaraRvGPSTimer;
++    friend class SaraPathTimer;
++    friend class SaraFANTTimer;
++    friend class SaraRRPRTimer;
++    
++    nsaddr_t no_addr;             /* node addr */
++    int F;
++    int ph_max_level;
++    int rand_seed;
++    int bcast_limit;
++    int nrRetry;
++    int rumo;
++    int velocidade;
++    int metrica;
++    int gps;
++    int count_route_repair;
++    int count_route_disc;
++    int ph_mod;
++    int q_mod;
++    int nr_pkt;
++    u_int32_t ant_seq_num;	// sequence number for ant packets
++    
++    double taxa_evap;
++    double avg_delay;
++    double delta;
++    double latitude;
++    double longitude;
++    double hello_int;
++    double ph_valid;
++    double startT;
++    double rd_int;
++    double rr_int;
++    double sd_int;
++    double log_cbr;
++    double next_hello;
++    
++    ARAVector fant;		/* FANT list by active session */
++    ARAVector ngh;		/* neighbor lits */
++    ARAVector rt;		/* route table */
++    ARAVector sessao;		/* route discover active procedures list */
++    ARAVector reparar;		/* route repair active procedures list */
++    ARAVector caminho;		/* saves information about the path used (statistical information) */
++    ARAVector caminho_dados;	
++    ARARQueue rqueue;		/* temporary packet queue */
++    map_sn_t  expc_sn, next_sn;
++    map_sn_t  rd_sn;
++
++
++ protected:
++     PortClassifier* demux_;       /* for passing packet to other agents */
++     PriQueue* ifqueue;
++     Trace* logRoute_;
++     Trace* logBuffer_;
++     
++     SaraNghTimer ngh_timer_;
++     SaraRvGPSTimer rv_gps_timer_;
++     SaraPathTimer path_timer_;
++     SaraFANTTimer fant_timer_;
++     SaraRRPRTimer rrpr_timer_;
++     
++     int initialized() { return 1 && target_; }
++
++ public:
++    Sara(nsaddr_t);                /* just pass the address, node is UP */
++    virtual ~Sara();               /* class destructor */
++    
++    virtual void recv(Packet *, Handler *); /* to receive packets from simulator */
++    virtual void recvSaraPkt(Packet *);
++    virtual void recvSaraHELLO(Packet *);
++    virtual void recvSaraFANT(Packet *);
++    virtual void recvSaraFCONF(Packet *);
++    virtual void recvSaraRERR(Packet *);
++    virtual void recvSaraBANT(Packet *);
++    virtual void recvSaraRFANT(Packet *);
++    virtual void recvSaraRBANT(Packet *);
++    virtual void forwardData(Packet *, double);
++    virtual void rtResolve(Packet *);
++    virtual void cleanRT();
++    virtual void deleteBrokenLink(nsaddr_t);
++    virtual int  sendSaraPkt(u_int8_t, args_t&); /* sends an ARA packet */
++    virtual void sendFANTPkt(nsaddr_t, nsaddr_t);
++    virtual void sendFANTPkt(SARASeqNum *, int, int);
++    virtual void sendQueuePkt(nsaddr_t);
++    virtual void startRouteDiscovery(nsaddr_t);
++    virtual void startRouteRepair(nsaddr_t, nsaddr_t, nsaddr_t, int, int);
++    virtual void actualizarFeromona(SARANeighbor *);
++    virtual void displayRT();
++    virtual void addSN(Packet *);
++    virtual void getSN(Packet *);
++    
++    
++    virtual void resetSaraNghTimer();   /* reset the timer */
++    virtual void resetSaraRvGPSTimer();
++    virtual void resetSaraPathTimer();
++    virtual void resetSaraFantTimer();
++    virtual void resetSaraRRPRTimer();
++    
++    virtual void calcPosicao(bool); /* calculate C/S and node position */
++    virtual void rt_ll_failed(Packet*); /* called when tx fails */
++    virtual SARANeighbor* addVizinho(nsaddr_t);  
++    virtual SARA_RT* addRota(nsaddr_t, int); 
++    
++    virtual double custoDistanciaFeromonas(SARANeighbor *, SARA_Rotas *);
++    
++    virtual int command(int, const char*const*);  /* to receive commands from tcl scrip */
++    virtual int getRumo();
++    virtual int getVelocidade();
++    virtual int findNextNode(nsaddr_t, nsaddr_t, nsaddr_t, int);
++    virtual int findNextNode(nsaddr_t, nsaddr_t, nsaddr_t);
++    virtual int actualizarRT(nsaddr_t, nsaddr_t, nsaddr_t, int, SARANeighbor *, int);
++    virtual int getMinSaltosPDestino(nsaddr_t);
++    
++    virtual float getLatitude();
++    virtual float getLongitude();
++    virtual nsaddr_t getNodeAddr() const; /* gets node address */
++    
++};
++
++#endif
+diff -Naur ns-2.34-orig/sara/sara_ngh.cc ns-2.34/sara/sara_ngh.cc
+--- ns-2.34-orig/sara/sara_ngh.cc	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/sara/sara_ngh.cc	2015-02-22 22:29:41.016736684 +0100
+@@ -0,0 +1,397 @@
++#include <assert.h>
++#include <sara/sara_ngh.h>
++
++
++
++void
++SaraPhvTimer::expire(Event *e) {
++  
++  agent_->delFeromona();
++}
++
++
++
++/*
++ * SARACaminho class:
++ * This class allows the creation of a list with different destinations which can be
++ * reach through a certain neighbor. Has a pointer to the route table
++ *
++ * autor: Fernando Correia
++ * data: Novembro 2007
++ */
++SARACaminho::SARACaminho(nsaddr_t dst) :
++  ARABase((double)dst),
++  dst(dst),
++  caminho(NULL)
++{
++}
++
++
++SARACaminho::~SARACaminho()
++{
++  if(caminho != NULL){
++    caminho->setVizinho(NULL);
++  }
++}
++
++
++
++
++/*
++ * SARANeighbor class:
++ * This class allow the creation of a neighbor list. Each object is updated uppon receiving
++ * a hello message or when a packet arrive to the node.
++ *
++ * autor: Fernando Correia
++ * data: Outubro 2007
++ */
++
++SARANeighbor::SARANeighbor(nsaddr_t id, int mf, double theDt, int n_tentativas,
++                           float tPhv, double te, int mod) :
++    ARABase((double)id),
++    endereco(id),
++    feromona(0),
++    max_feromona(mf),
++    max_tentativas(n_tentativas),
++    tentativas((double)n_tentativas),
++    rumo(0),
++    velocidade(0),
++    nivelDec(1),
++    ph_mod(mod),
++    ph_last(0),
++    ph_actual(0),
++    dt(theDt),
++    taxa_evaporacao(te),
++    amp_derivada(0.0),
++    sqr_amp_derivada(0.0),
++    rbuffer(0),
++    wbuffer(0),
++    cbuffer(0),
++    wmat(0),
++    rmat(0),
++    latitude(0.0),
++    longitude(0.0),
++    phv(tPhv),
++    phv_timer(this)
++{
++    ph_mod == TEMPORAL ? phv_timer.resched(0.05) : phv_timer.resched(phv);
++    cusum = 0.0;
++    ewma = new double [5];
++    for(int i = 0; i < 5; i++)
++        ewma[i] = 0.0;
++    delta[0] = 0.1;
++    delta[1] = 0.2;
++    delta[2] = 0.4;
++    delta[3] = 0.6;
++    delta[4] = 0.8;
++    for(int i = 0; i < 100; i++)
++        buffer_dev[i] = 0.0;
++}
++
++
++
++SARANeighbor::~SARANeighbor()
++{
++  rotas.deleteAll();
++  phv_timer.force_cancel();
++  delete [] ewma;
++}
++
++
++void
++SARANeighbor::resetState(double delta)
++{
++  estado = ON;
++  tentativas += delta;
++  if(tentativas > (double)max_tentativas)
++    tentativas = (double)max_tentativas;
++}
++
++
++
++/*
++ * setState(): change the neighbor state
++ *
++ * IN: ON, IDLE, OFF
++ */
++void
++SARANeighbor::setState(int st)
++{
++    estado = st;
++}
++
++
++
++void
++SARANeighbor::setNextState()
++{
++  switch(estado){
++  case ON:
++    estado = IDLE;
++    break;
++
++  case IDLE:
++    estado = OFF;
++    break;
++
++  default:
++    estado = OFF;
++  }
++}
++
++
++void
++SARANeighbor::setAtitude(int r, int v)
++{
++  rumo = r;
++  velocidade = v;
++}
++
++
++void
++SARANeighbor::setPosicao(float x, float y)
++{
++  latitude = y;
++  longitude = x;
++}
++
++
++nsaddr_t
++SARANeighbor::getEndereco()
++{
++  return endereco;
++}
++
++
++int
++SARANeighbor::getState()
++{
++  return estado;
++}
++
++
++int
++SARANeighbor::getRumo()
++{
++  return rumo;
++}
++
++
++int
++SARANeighbor::getVelocidade()
++{
++  return velocidade;
++}
++
++
++float
++SARANeighbor::getLatitude()
++{
++  return latitude;
++}
++
++
++float
++SARANeighbor::getLongitude()
++{
++  return longitude;
++}
++
++
++void
++SARANeighbor::display()
++{
++  fprintf(stdout, "\tAddress: %d\n", endereco);
++  fprintf(stdout, "\tCourse: %d, Speed: %d\n", rumo, velocidade);
++  fprintf(stdout, "\tGPS - Latitude: %f, Longitude: %f\n", latitude, longitude);
++}
++
++
++
++void
++SARANeighbor::deleteCaminhos()
++{
++  rotas.deleteAll();
++}
++
++
++SARACaminho *
++SARANeighbor::addDestino(nsaddr_t dst)
++{
++
++  SARACaminho *caminho;
++  int idx;
++
++  if((idx = rotas.hasItem((double)dst)) >= 0){ // this neighbor knows how to reach the destination node
++    return (SARACaminho *)rotas[idx];
++  }
++
++  caminho = new SARACaminho(dst);
++  assert(caminho);
++  rotas.add(caminho);
++
++  return caminho;
++}
++  
++
++SARACaminho *
++SARANeighbor::getDestino(nsaddr_t dst)
++{
++  int idx;
++
++  idx = rotas.hasItem((double)dst);
++
++  return idx < 0 ? NULL : (SARACaminho *)rotas[idx];
++}
++
++
++void
++SARANeighbor::delDestino(nsaddr_t dst)
++{
++  int idx;
++
++  idx = rotas.hasItem((double)dst);
++
++  if(idx >= 0)
++    rotas.deleteItem(idx);
++}
++
++
++void
++SARANeighbor::updateFeromona()
++{
++    double st;
++    nsaddr_t local;
++
++    st = CURRENT_TIME;
++    local = endereco;
++
++    switch(ph_mod){
++        case CLASSICO:
++            feromona++;
++            break;
++            
++        case PERIODICO_SEM:
++            nivelDec = 1;
++            ph_actual++;
++            break;
++            
++        case PERIODICO_COM:
++            ph_actual++;
++            ph_actual = ph_actual < max_feromona ? ph_actual : max_feromona;
++            nivelDec = 1;
++            break;
++
++        case TEMPORAL:
++            if(ph_actual && wmat == rmat){
++                fprintf(stdout, "can't record more pheromones. The vector just reach the limit.\n");
++            }
++            else{
++                mat[wmat] = CURRENT_TIME+phv;
++                wmat = ++wmat % 1024;
++            }
++            ph_actual++;
++            break;
++
++    }
++
++}
++
++
++int
++SARANeighbor::getFeromona()
++{
++  return ph_actual;
++}
++
++
++
++void
++SARANeighbor::setFeromona(int newValue)
++{
++    ph_actual = newValue;
++}
++
++
++
++void
++SARANeighbor::delFeromona()
++{
++  nsaddr_t local;
++  double st;
++  int count;
++
++  local = endereco;
++  st = CURRENT_TIME;
++
++  if(ph_mod >= PERIODICO_SEM){
++      ph_actual -= nivelDec;
++      if(ph_actual < 1)
++          ph_actual = 0;
++      nivelDec = ph_actual ? nivelDec * 2 : 0;;
++      // activate timer
++      phv_timer.resched(phv);
++  }
++  else if(ph_mod == TEMPORAL){
++      count = 0;
++      while(rmat != wmat){
++          if(mat[rmat] >= st)   // the pheromone is still active
++              break;            // stop counting
++          count++;
++          rmat = ++rmat % 1024;
++      }
++      ph_actual = ph_actual < count ? 0 : ph_actual-count;
++      
++      phv_timer.resched(0.05);
++  }
++  else{
++      ph_actual = taxa_evaporacao*ph_actual + feromona;
++      feromona = 0;
++
++      phv_timer.resched(phv);
++  }
++}
++
++
++
++int
++SARANeighbor::getNivelDec()
++{
++  return nivelDec;
++}
++
++
++void
++SARANeighbor::setNivelDec(int nn)
++{
++  nivelDec = nn;
++}
++
++
++
++void
++SARANeighbor::setNivelErro(double novo_valor)
++{
++  if(novo_valor < 0.0)
++    tentativas = 0.0;
++  else if(novo_valor > (double)max_tentativas)
++    tentativas = (double)max_tentativas;
++  else
++    tentativas = novo_valor;
++}
++
++
++double
++SARANeighbor::getNivelErro()
++{
++  return tentativas;
++}
++
++  
++uint64_t
++SARANeighbor::getPhActual()
++{
++    return ph_actual;
++}
++
++
+diff -Naur ns-2.34-orig/sara/sara_ngh.h ns-2.34/sara/sara_ngh.h
+--- ns-2.34-orig/sara/sara_ngh.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/sara/sara_ngh.h	2015-02-22 22:29:41.017736717 +0100
+@@ -0,0 +1,148 @@
++#ifndef _SARA_NGH_H
++#define _SARA_NGH_H
++
++#include <math.h>
++#include <packet.h>
++#include <assert.h>
++#include <stdint.h>
++#include <timer-handler.h>
++
++#include <ara/ara_base.h>
++#include <ara/ara_vector.h>
++#include <sara/sara_pkt.h>
++
++class SARANeighbor;
++class SARACaminho;
++
++#include <sara/sara_rotas.h>
++
++
++
++class SARACaminho : public ARABase {
++ public:
++  nsaddr_t dst;
++  SARA_Rotas *caminho;
++
++  SARACaminho(nsaddr_t dst);
++  virtual ~SARACaminho();
++};
++
++
++
++/*
++ * Timer to evaporate the pheromones
++ */
++class SaraPhvTimer : public TimerHandler {
++ public:
++  SaraPhvTimer(SARANeighbor *agent) : TimerHandler() {
++    agent_ = agent;
++  }
++
++ protected:
++  SARANeighbor *agent_;
++
++  virtual void expire(Event* e);
++};
++
++
++
++class SARANeighbor : public ARABase {
++
++    friend class SaraPhvTimer;
++
++    ARAVector rotas;
++    
++    nsaddr_t endereco;
++    int estado;
++    int feromona;
++    int max_feromona;
++    int max_tentativas;
++    double tentativas;
++    int rumo;
++    int velocidade;
++    int nivelDec;
++
++    #define MAX_BUFFER 10       //
++    
++    int     ph_mod;             // pheromone evaporation model
++    int     ph_last;
++    double  ph_actual;
++    double  dt;
++    double  cusum;
++    double  *ewma;
++    double  delta[5];
++    double  taxa_evaporacao;    // 0 < evaporation_rate < 1
++    double  amp_derivada;
++    double  sqr_amp_derivada;
++    double  buffer_dev[MAX_BUFFER];
++    int     rbuffer;
++    int     wbuffer;
++    int     cbuffer;
++
++
++    // temporal pheromone information
++    double mat[1024];
++    int    wmat;
++    int    rmat;
++    
++    float latitude;
++    float longitude;
++    float phv;
++    
++ protected:
++  SaraPhvTimer phv_timer;
++
++ public:
++    SARANeighbor(nsaddr_t id, int mf,
++                 double dt = 0.5,
++                 int n_tentativas = 5,
++                 float phv = 1.0,
++                 double te = 0.5,
++                 int mod = 0);
++    virtual ~SARANeighbor();
++
++    virtual void setState(int);
++    virtual void setNextState();
++    virtual void resetState(double);
++    virtual void setAtitude(int r, int v);
++    virtual void setPosicao(float x, float y);
++    virtual void display();
++    virtual void deleteCaminhos();
++    virtual void updateFeromona();
++    virtual void setFeromona(int);
++    virtual void delFeromona();
++    virtual void setNivelDec(int);
++    virtual void setNivelErro(double);
++    virtual int getState();
++    virtual int getFeromona();
++    virtual int getNivelDec();
++    virtual double getNivelErro();
++    
++    virtual SARACaminho* addDestino(nsaddr_t);
++    virtual SARACaminho* getDestino(nsaddr_t);
++    virtual void  delDestino(nsaddr_t);
++    
++    virtual nsaddr_t getEndereco();
++    virtual int getRumo();
++    virtual int getVelocidade();
++    virtual float getLatitude();
++    virtual float getLongitude();
++
++    virtual uint64_t getPhActual();
++
++
++    enum {ON, IDLE, OFF};
++    enum {CLASSICO, TEMPORAL, PERIODICO_SEM, PERIODICO_COM};
++    /*
++     * CLASSICO: ACO evaporation model
++     * TEMPORAL: Temporal Active Pheromone model
++     * PERIODICO_SEM: Progressive Pheromone Reduction model
++     * PERIODICO_COM: Progressive Pheromone Reduction model with Maximum Value
++     *
++     * (should be consider the CLASSICO (0) or PERIODICO_COM (3) pheromone
++     * evaporation models.
++     */
++
++};
++
++#endif
+diff -Naur ns-2.34-orig/sara/sara_pkt.h ns-2.34/sara/sara_pkt.h
+--- ns-2.34-orig/sara/sara_pkt.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/sara/sara_pkt.h	2015-02-22 22:29:41.017736717 +0100
+@@ -0,0 +1,103 @@
++#ifndef _SARA_PKT_H
++#define _SARA_PKT_H
++
++#include <packet.h>
++
++/* types of ARA packet headers  */
++#define SARA_HELLO 0		/* anounce to the neighbours */
++#define SARA_FANT  1		/* route request */
++#define SARA_BANT  2		/* route reply */
++#define SARA_RERR  3		/* route error */
++#define SARA_RFANT 4		/* route repair FANT */
++#define SARA_RBANT 5		/* route repair BANT */
++#define SARA_FCONF 6		/* fant de confirmacao */
++
++/* packet size */
++#define SARA_HELLO_SIZE sizeof(u_int8_t)+sizeof(u_int16_t)+sizeof(float)*2
++#define SARA_FANT_SIZE  sizeof(nsaddr_t)*3+sizeof(u_int8_t)*2+sizeof(u_int16_t)
++#define SARA_RERR_SIZE  sizeof(nsaddr_t)*2+2
++#define SARA_BANT_SIZE  sizeof(nsaddr_t)*2+4
++#define SARA_RFANT_SIZE sizeof(nsaddr_t)*2+4
++#define SARA_RBANT_SIZE sizeof(nsaddr_t)*2+3
++#define SARA_FCONF_SIZE sizeof(nsaddr_t)*2+1
++
++
++/* 
++ * bit flags
++ * 8 7 6 5 4 3 2 1
++ * bit8: 
++ * bit7:
++ * bit6:
++ * bit5: 
++ * bit4: 
++ * bit3: 
++ * bit2: nao tenho caminho, e enviei erro
++ * bit1: ja encaminhei a FANT
++ */
++#define bit8 0x80
++#define bit7 0x40
++#define bit6 0x20
++#define bit5 0x10
++#define bit4 0x08
++#define bit3 0x04
++#define bit2 0x02		/* route repair procedure error msg */
++#define bit1 0x01		/* route dicovery FANT error msg*/
++
++#define HDR_SARA(p) hdr_sara::access(p) /* macro to extract ara packet header */
++
++#define CURRENT_TIME   Scheduler::instance().clock()
++#define MAXRDPKT       256      /* max number of route discover packets */
++#define NETWORK_DIAMETER 127
++#define MAX_HOP        32
++#define SARA_ENVIA_FANT     0.5	/* FANT tx every 500ms */
++#define SARA_REPARA_CAMINHO 1.0	/* time to repair the path */
++#define SARA_REPETE_FANT    0.2	/* time to re-tx FANT */
++#define SARA_FANT_CONF      0.05
++#define SARA_CAMINHO_CONF   0.1
++#define SARA_REPARA_TIMER   0.01
++
++// The followings are used for the forward() function. Controls pacing.
++#define DELAY 1.0           // random delay
++#define NO_DELAY -1.0       // no delay
++
++// think it should be 30 ms
++#define ARP_DELAY 0.01      // fixed delay to keep arp happy
++
++
++struct hdr_sara {
++    nsaddr_t src_;                /* flow source node */
++    nsaddr_t dst_;                /* flow destination node */
++    nsaddr_t prev_;               /* previous hop */
++    nsaddr_t next_;
++    u_int8_t ttl;
++    u_int8_t antValue;
++    u_int8_t flags;               /* bit to indicate packet state */
++    u_int8_t type_;               /* type of header in accordance with */
++    u_int16_t pid;                /* path id */
++    u_int32_t seq_num;            /* packet sequence number */
++    u_int16_t numhop;             /* number of hops */
++    u_int16_t dnumhop;
++    float latitude, longitude;	  /* GPS coordinates*/
++    double time_stamp;
++    u_int8_t velocidade;
++    u_int16_t rumo;
++    u_int8_t size;
++
++  inline nsaddr_t& sara_src() {return src_;}
++  inline nsaddr_t& sara_dst() {return dst_;}
++  inline nsaddr_t& sara_nxt() {return next_;}
++  inline nsaddr_t& sara_prev() {return prev_;}
++  inline u_int8_t& sara_type() {return type_;}
++
++ /* Header acces methods required by PacketHeaderManager */
++  static int offset_;
++  inline static int& offset() {return offset_;}
++  inline static hdr_sara* access(const Packet* p){
++    return (hdr_sara*)p->access(offset_);
++  }
++};
++
++
++
++#endif
++
+diff -Naur ns-2.34-orig/sara/sara_rotas.cc ns-2.34/sara/sara_rotas.cc
+--- ns-2.34-orig/sara/sara_rotas.cc	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/sara/sara_rotas.cc	2015-02-22 22:29:41.017736717 +0100
+@@ -0,0 +1,71 @@
++#include <sara/sara_rotas.h>
++
++/*
++ * Constructor for the class which keep information about the neighbors
++ * that could be used to reach a certain destination
++ */
++SARA_Rotas::SARA_Rotas(nsaddr_t id, nsaddr_t rt, SARANeighbor *nh) :
++  ARABase((double)id),
++  vizinho(nh),
++  saltos(1),
++  daddr(rt),
++  time_stamp(CURRENT_TIME)
++ {
++}
++
++
++SARA_Rotas::~SARA_Rotas()
++{
++    /*
++     * go to the neighbor object and sets the destination pointer to NULL
++     */
++    if(vizinho){
++        SARACaminho *caminho = vizinho->getDestino(daddr);
++
++        if(caminho)
++            caminho->caminho = NULL;
++    }
++}
++
++
++
++SARANeighbor *
++SARA_Rotas::getVizinho()
++{
++  return vizinho;
++}
++
++
++void
++SARA_Rotas::setVizinho(SARANeighbor *nh)
++{
++  vizinho = nh;
++}
++
++
++int
++SARA_Rotas::getSaltos()
++{
++  return saltos;
++}
++
++
++void
++SARA_Rotas::setSaltos(int nhops)
++{
++  saltos = nhops;
++}
++
++
++double
++SARA_Rotas::getTimeStamp()
++{
++  return time_stamp;
++}
++
++
++void
++SARA_Rotas::resetTimeStamp()
++{
++  time_stamp = CURRENT_TIME;
++}
+diff -Naur ns-2.34-orig/sara/sara_rotas.h ns-2.34/sara/sara_rotas.h
+--- ns-2.34-orig/sara/sara_rotas.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/sara/sara_rotas.h	2015-02-22 22:29:41.017736717 +0100
+@@ -0,0 +1,34 @@
++#ifndef _SARA_ROTAS_H
++#define _SARA_ROTAS_H
++
++#include <ara/ara_base.h>
++#include <ara/ara_vector.h>
++
++class SARA_Rotas;
++
++#include <sara/sara_ngh.h>
++
++
++class SARA_Rotas : public ARABase {
++
++    SARANeighbor *vizinho;
++    int saltos;			
++    int daddr;
++
++    double time_stamp;
++
++ public:
++    SARA_Rotas(nsaddr_t, nsaddr_t, SARANeighbor *);
++    virtual ~SARA_Rotas();
++
++    virtual SARANeighbor* getVizinho();
++    virtual void setVizinho(SARANeighbor *);
++    virtual int getSaltos();
++    virtual void setSaltos(int);
++    virtual double getTimeStamp();
++    virtual void resetTimeStamp();
++};
++
++
++
++#endif
+diff -Naur ns-2.34-orig/sara/sara_rt.cc ns-2.34/sara/sara_rt.cc
+--- ns-2.34-orig/sara/sara_rt.cc	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/sara/sara_rt.cc	2015-02-22 22:29:41.017736717 +0100
+@@ -0,0 +1,287 @@
++#include <sara/sara_rt.h>
++
++
++void
++SaraRtTimer::expire(Event *e) {
++  
++  agent_->changeSituacao();
++}
++
++
++
++
++SARA_RT::SARA_RT(nsaddr_t id) : 
++  ARABase((double)id),
++  dst(id),		 // node address
++  estado(PROC),		
++  situacao(ACTIVO),
++  min_saltos(NETWORK_DIAMETER),
++  rt_timer(this)
++{
++    //rt_timer.resched(RT_VERIF);
++}
++
++
++SARA_RT::~SARA_RT()
++{
++  rotas.deleteAll();
++  rt_timer.force_cancel();
++}
++
++
++SARA_Rotas *
++SARA_RT::addRotas(nsaddr_t nh, SARANeighbor *caminho, int nhops)
++{
++  SARA_Rotas *nova_rota;
++  int idx;
++
++  if((idx = rotas.hasItem((double)nh)) < 0){ // the route for this destination doesn't exists
++      nova_rota = new SARA_Rotas(nh, dst, caminho);
++      assert(nova_rota);
++      rotas.add(nova_rota);
++  }
++  else
++      nova_rota = (SARA_Rotas *)rotas[idx];
++
++  nova_rota->setSaltos(nhops);
++  min_saltos = getMinHopsToDst();
++  
++  return nova_rota;
++}
++
++
++
++int
++SARA_RT::delRotas()
++{
++  int i = 0;
++  int min_hops = NETWORK_DIAMETER;
++  SARA_Rotas *rt_vizinho;
++
++  while(i < rotas.getSize()){
++    rt_vizinho = (SARA_Rotas *)rotas[i];
++    if(rt_vizinho && rt_vizinho->getVizinho() != NULL){
++      if(rt_vizinho->getSaltos() < min_hops)
++	min_hops = rt_vizinho->getSaltos();
++      i++;
++      continue;
++    }
++    rotas.deleteItem(i);	// invalid neighbor
++  }
++
++  if(min_hops != NETWORK_DIAMETER) min_saltos = min_hops;
++
++  return (min_hops == NETWORK_DIAMETER) ? -1 : min_hops;
++}
++
++
++
++void
++SARA_RT::display()
++{
++  SARA_Rotas *tmpRota;
++ 
++  fprintf(stdout, "To reach %d, I have [%d] routes:\n", dst, rotas.getSize());
++  for(int j = 0; j < rotas.getSize(); j++){
++    tmpRota = (SARA_Rotas *)rotas[j];
++    tmpRota->getVizinho()->display();
++    fprintf(stdout, "\twith %d hops.\n",  tmpRota->getSaltos());
++  }
++}
++
++
++
++nsaddr_t
++SARA_RT::getDestino()
++{
++  return dst;
++}
++
++
++
++int
++SARA_RT::hasCaminho(nsaddr_t nh)
++{
++  return rotas.hasItem((double)nh);
++}
++
++
++void
++SARA_RT::delCaminho(nsaddr_t nh)
++{
++  rotas.deleteItem(hasCaminho(nh));
++  min_saltos = getMinHopsToDst();
++}
++
++
++
++SARA_Rotas*
++SARA_RT::getCaminho(nsaddr_t nh)
++{
++  int idx = rotas.hasItem((double)nh);
++
++  assert(idx >= 0);
++
++  return (SARA_Rotas *)rotas[idx];
++}
++
++
++void
++SARA_RT::setEstado(int novo_estado)
++{
++  estado = novo_estado;
++}
++
++
++
++int
++SARA_RT::getEstado()
++{
++  return estado;
++}
++
++
++
++int
++SARA_RT::getSaltos()
++{
++  return getMinHopsToDst();
++}
++
++
++int
++SARA_RT::getNrRotas()
++{
++    return rotas.getSize();
++}
++
++
++SARA_Rotas *
++SARA_RT::getRota(int idx)
++{
++  assert(idx >= 0 && idx < rotas.getSize());
++  return (SARA_Rotas *)rotas[idx];
++}
++
++
++
++nsaddr_t
++SARA_RT::getCaminhoMaisCurtoParaDst()
++{
++  SARA_Rotas *tmp_rota;
++  int nhops = NETWORK_DIAMETER;
++  int naddr = -1;
++
++  for(int i = 0; i < rotas.getSize(); i++){
++    tmp_rota = (SARA_Rotas *)rotas[i];
++    if(nhops > tmp_rota->getSaltos()){
++      nhops = tmp_rota->getSaltos();
++      naddr = tmp_rota->getVizinho()->getEndereco();
++    }
++  }
++
++  return naddr;
++}
++
++
++
++int
++SARA_RT::getMinHopsToDst()
++{
++  SARA_Rotas *tmp_rota;
++  int nhops = NETWORK_DIAMETER;
++
++  for(int i = 0; i < rotas.getSize(); i++){
++    tmp_rota = (SARA_Rotas *)rotas[i];
++    if(nhops > tmp_rota->getSaltos()){
++      nhops = tmp_rota->getSaltos();
++    }
++  }
++
++  return min_saltos = nhops;
++}
++
++
++
++void
++SARA_RT::delRota(int nhops)
++{
++  SARA_Rotas *tmp_rotas;
++  int i = 0;
++
++  // for each route which hop distance is greater than nhops, do:
++  while(i < rotas.getSize()){
++    tmp_rotas = (SARA_Rotas *)rotas[i];
++    if(tmp_rotas->getSaltos() > nhops){	// if the path is longer than the actual one
++      // delete the route info from the neighbor object
++      tmp_rotas->getVizinho()->delDestino(dst);
++      // delete the neighbor from the route table
++      rotas.deleteItem(i);
++      continue;
++    }
++    i++;
++  }
++
++  if(rotas.getSize() != 0)
++    min_saltos = getMinHopsToDst();
++}
++
++
++void
++SARA_RT::delRota(double ts)
++{
++  SARA_Rotas *tmp_rotas;
++  int i = 0;
++
++  // for each route which hop distance is greater than nhops, do:
++  while(i < rotas.getSize()){
++    tmp_rotas = (SARA_Rotas *)rotas[i];
++    if((ts - tmp_rotas->getTimeStamp() > RT_VALID) ||
++       situacao == DELE){ // the older routes which are not used, delete
++        tmp_rotas->getVizinho()->delDestino(dst);
++        rotas.deleteItem(i);
++        continue;
++    }
++    i++;
++  }
++
++  if(rotas.getSize() != 0)
++    min_saltos = getMinHopsToDst();
++}
++
++
++void
++SARA_RT::changeSituacao()
++{
++
++  switch(situacao){
++      case ACTIVO:
++          setSituacao(IDLE);
++          rt_timer.resched(RT_VERIF);
++          break;
++          
++      case IDLE:
++          setSituacao(DELE);
++          break;
++  }
++}
++
++
++int
++SARA_RT::getSituacao()
++{
++  return situacao;
++}
++
++
++void
++SARA_RT::setSituacao(int novaSit)
++{
++  situacao = novaSit;
++  if(novaSit == DELE)
++    rt_timer.force_cancel();
++  else if(novaSit == ACTIVO){
++    if(rt_timer.status() == 0)
++      rt_timer.resched(RT_VERIF);
++  }
++}
+diff -Naur ns-2.34-orig/sara/sara_rt.h ns-2.34/sara/sara_rt.h
+--- ns-2.34-orig/sara/sara_rt.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/sara/sara_rt.h	2015-02-22 22:29:41.017736717 +0100
+@@ -0,0 +1,79 @@
++#ifndef _SARA_RT_H
++#define _SARA_RT_H
++
++#include <assert.h>
++#include <packet.h>
++#include <timer-handler.h>
++
++#include <ara/ara_base.h>
++#include <ara/ara_vector.h>
++#include <sara/sara_ngh.h>
++#include <sara/sara_rotas.h>
++#include <sara/sara_pkt.h>
++
++#define RT_VERIF 5.0
++#define RT_VALID 5.0
++
++class SARA_RT;
++
++/*
++ * Timer to validate if the route is stil valid
++ */
++class SaraRtTimer : public TimerHandler {
++ public:
++  SaraRtTimer(SARA_RT *agent) : TimerHandler() {
++    agent_ = agent;
++  }
++
++ protected:
++  SARA_RT *agent_;
++
++  virtual void expire(Event* e);
++};
++
++
++
++
++class SARA_RT : public ARABase {
++
++  friend class SaraRtTimer;
++
++  nsaddr_t dst;
++  int estado;
++  int situacao;
++  int min_saltos;
++  ARAVector rotas;
++
++ protected:
++  SaraRtTimer rt_timer;		
++
++ public:
++  SARA_RT(nsaddr_t dst);
++  virtual ~SARA_RT();
++
++  virtual SARA_Rotas* addRotas(nsaddr_t nh, SARANeighbor *caminho, int nhops);
++  virtual SARA_Rotas* getRota(int);
++  virtual int getNrRotas();
++  virtual int delRotas();
++  virtual void delRota(int);
++  virtual void delRota(double);
++  virtual nsaddr_t getDestino();
++  virtual nsaddr_t getCaminhoMaisCurtoParaDst();
++  virtual int getMinHopsToDst();
++  virtual void delCaminho(nsaddr_t);
++  virtual int hasCaminho(nsaddr_t);
++  virtual SARA_Rotas* getCaminho(nsaddr_t);
++  virtual void setEstado(int);
++  virtual int getEstado();
++  virtual void setSituacao(int);
++  virtual int getSituacao();
++  virtual void changeSituacao();
++  virtual int getSaltos();
++
++  virtual void display();
++
++  enum {PROC, ACTIVO, REP, IDLE, DELE};
++};
++
++
++#endif
+diff -Naur ns-2.34-orig/sara/sara_seqnum.cc ns-2.34/sara/sara_seqnum.cc
+--- ns-2.34-orig/sara/sara_seqnum.cc	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/sara/sara_seqnum.cc	2015-02-22 22:29:41.018736750 +0100
+@@ -0,0 +1,619 @@
++#include <assert.h>
++#include <random.h>
++#include <sara/sara_seqnum.h>
++
++
++/*
++ * SARASeqNum() class constructor
++ *
++ * IN:
++ *   nsaddr_t saddr: flow source address
++ *   nsaddr_t daddr: flow destination address
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia; date: May06
++ */
++SARASeqNum::SARASeqNum(nsaddr_t sa, nsaddr_t da) :
++  ARABase(ARABase::calcHash(sa, da)),
++  minHops(0),
++  s(sa),
++  d(da)
++{
++  firstTime = true;
++  pathFound = false;
++  startTime = CURRENT_TIME;
++  lastUse   = CURRENT_TIME;
++  endTime   = 0.0;
++  seq_num   = Random::uniform()*MAXSN;
++  pid       = 0;
++  pid_stable= 0;
++  firstHopValue = NETWORK_DIAMETER;
++  short_path_addr  = -1;
++  nl = NULL;
++
++  resetFantArray();	
++}
++
++
++
++/*
++ * SARASeqNum class destructor
++ *
++ * author: Fernando Correia; date: May06
++ */
++SARASeqNum::~SARASeqNum()
++{
++  deleteFantList();
++  deleteNodeList();
++}
++
++
++
++/*
++ * addHop(): adds a new previous hop or an invalid hop for this ara packet
++ *
++ * IN:
++ *   int sn:   packet sequence number
++ *   nsaddr_t: hop address
++ *   int shops: number of hops from source to this node
++ *   int type: type of record
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia; date: May06
++ */
++void
++SARASeqNum::addHop(int theSn, nsaddr_t ha, int src_hops, int type)
++{
++  prevh_t *tmp = new prevh_t;
++  prevh_t *aux;
++
++  assert(tmp);
++  tmp->haddr= ha;
++  tmp->type = type;      
++  tmp->next = NULL;
++  tmp->resp = INFO_DEF;
++  tmp->fant_conf = false;
++
++  if(type == INFO_DST && firstHopValue == NETWORK_DIAMETER) 
++    firstHopValue = src_hops;
++
++  // Q: is minHops not initialized or shopd less than minHops ?
++  if(!minHops || src_hops <= minHops){
++    minHops = src_hops;       // A: yes, set minHops with actual value
++    short_path_addr = ha;     // address of the prev_hop short path to source node
++  }
++
++  if(!fant[theSn].next){        // Q: first time for this packet number ?
++    fant[theSn].next = tmp;	// A: yes
++  }
++  else if(type == INFO_DST){
++    tmp->next = fant[theSn].next;
++    fant[theSn].next = tmp;
++  }
++  else{
++    aux = fant[theSn].next;
++    while(aux->next)            // search for last position in the list
++      aux = aux->next;
++    aux->next = tmp;            // put in last position
++  }
++ 
++  int fs;
++  if(type == INFO_DST || type == INFO_ERR)
++    fs = FANT_NCONF;
++  else
++    fs = FANT_SCONF;
++
++  setFantState(theSn, fs);
++  lastUse = CURRENT_TIME;
++}
++
++
++
++/*
++ * getHopList(): returns the list of previous hop and the invalid hops
++ *
++ * IN:
++ *   int theSn: sequence number to attach to the list
++ *
++ * OUT:
++ *   prevh_t *list: pointer to hop's list
++ *
++ * author: Fernando Correia; date: May06
++ */
++prevh_t *
++SARASeqNum::getHopList(int theSn)
++{
++  return (theSn >= 0 && theSn < MAXSN) ? fant[theSn].next : NULL;
++}
++
++
++
++/*
++ * hasFANT(): verifies if this sequence number already passed through this node
++ *
++ * IN:
++ *   int theSn: sequence number to verify
++ *
++ * OUT:
++ *   bool: true if it passed, false if not
++ *
++ * author: Fernando Correia; date: May06
++ */
++bool
++SARASeqNum::hasFANT(int theSn)
++{
++  prevh_t *tmp;
++  bool result = false;
++
++  assert(theSn >= 0 && theSn <MAXSN);
++  tmp = fant[theSn].next;
++  if(tmp && tmp->type == INFO_DST)
++    result = true;
++
++  return result;
++}
++
++
++
++/*
++ * hasCheckSN():
++ * checks if this node already knows this packet.
++ * only used in terms of routing table information and pheromone link update
++ *
++ * author: Fernando Correia; date: Dez06
++ */
++bool
++SARASeqNum::hasCheckSN(int theSn)
++{
++  bool result = false;
++
++  assert(theSn >= 0 && theSn <MAXSN);
++  if(fant[theSn].sn != -1)
++    result = true;
++
++  return result;
++}
++
++
++
++/*
++ * hasConfFANT(): checks if the FANT already pass through this node and it was confirmed
++ */
++bool
++SARASeqNum::hasConfFANT(int agn)
++{
++  if(agn < 0 || agn >= MAXSN)
++    return false;
++
++  return fant[agn].conf;
++}
++
++
++/*
++ * deleteItem(): deletes an item from vector
++ *
++ * IN:
++ *   int theSn: index position for object to be deleted
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia; date: May06
++ */
++void
++SARASeqNum::deleteItem(int theSn)
++{
++  prevh_t *t1, *t2;
++
++  if((t1 = fant[theSn].next) == NULL)  // if this entry is empty, do nothing
++    return;
++
++  do{                           // while there are item in list
++    t2 = t1->next;              // delete each one
++    delete t1;
++    t1 = t2;
++  }while(t1);
++
++  fant[theSn].next = NULL;             // list reset
++}
++
++
++
++/*
++ * deleteFantList(): deletes all members in list
++ *
++ * IN:
++ *   NIL
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia; date: May06
++ */
++void
++SARASeqNum::deleteFantList()
++{
++  for(int i = 0; i < MAXSN; i++)
++    deleteItem(i);
++}
++
++
++
++/*
++ * nodeVisited(): verifies if this ara packet sequence number already
++ *                visited that link
++ *
++ * IN:
++ *   nsaddr_t add: address node to verify
++ *   int sn: packet sequence number
++ *
++ * OUT:
++ *   bool: return 'true' if the node already has been visited, else return 'false'
++ *
++ * author: Fernando Correia; date: May06
++ */
++bool
++SARASeqNum::nodeVisited(nsaddr_t add, int num)
++{
++  prevh_t *hops = getHopList(num);
++
++  while(hops){                  // while there are items in the list
++    if(hops->haddr == add)     // Q: we have a match ?
++      return true;              // A: yes, return true
++    hops = hops->next;          // next item in list
++  }
++
++  return false;                 // reach end of list without a match
++}
++
++
++int
++SARASeqNum::nodeUsed(nsaddr_t add)
++{
++  node_list_t *hops = nl;
++
++  while(hops){
++    if(hops->node == add)
++      return (hops->count+1);
++    hops = hops->next;
++  }
++
++  return 1;
++}
++
++       
++
++/*
++ * getFirstHop(): returns the first hop in hop's list
++ *
++ * IN: 
++ *   int sn: packet sequence number
++ *
++ * OUT:
++ *   int: address for first hop
++ *
++ * author: Fernando Correia; date: May06
++ */
++int
++SARASeqNum::getFirstHop(int seqn)
++{
++  int fh;
++
++  fh = fant[seqn].next == NULL ? -1 : fant[seqn].next->haddr;
++
++  return fh;       // return first address in list
++}
++
++
++
++
++/*
++ * getCounter(): returns the value for counter atribute
++ *
++ * author: Fernando Correia; date: May06
++ */
++int
++SARASeqNum::getCounter()
++{
++  return counter;
++}
++
++
++
++
++/*
++ * incCounter(): increments counter data member
++ *
++ * author: Fernando Correia; date: May06
++ */
++void
++SARASeqNum::incCounter()
++{
++  counter++;
++}
++
++
++void
++SARASeqNum::decCounter()
++{
++  counter--;
++  counter = counter < 0 ? 0 : counter;
++}
++
++
++void
++SARASeqNum::resetCounter()
++{
++  deleteFantList();
++  deleteNodeList();
++  resetFantArray();
++}
++
++
++void
++SARASeqNum::resetFantArray()
++{
++  counter = 0;
++  pid = 0;
++
++  // reset aos array do objecto
++  for(int i = 0; i < MAXSN; i++){
++    fant[i].sn        = -1;
++    fant[i].next      = NULL;
++    fant[i].conf      = false;
++    fant[i].conf_time = 0.0;
++    fant[i].counter   = 0;
++    bant[i]           = false;
++  }
++}
++
++
++/*
++ * getMinHop(): return the minimum hop number registered, from current node
++ *              to source
++ * IN:
++ *   NIL
++ *
++ * OUT:
++ *   int: minimum hop number to source
++ *
++ * author: Fernando Correia; date: Jun06
++ */
++int
++SARASeqNum::getMinHop()
++{
++  return minHops;
++}
++
++
++
++/*
++ * setPit(): records last path id received. If destination node received
++ *           a strait 5 'pid' sequence, this means that we have found a
++ *           stable path from S --> D.
++ *           On next RREP, we set bit2 from flags field to '1'
++ *
++ * author: Fernando Correia; date: Jun06
++ */
++void
++SARASeqNum::setPid(u_int16_t thePid)
++{
++  if(pid == thePid)
++    pid_stable++;
++  else{
++    pid = thePid;
++    pid_stable = 1;
++  }
++}
++
++
++u_int16_t
++SARASeqNum::getPid()
++{
++  return pid;
++}
++
++
++void
++SARASeqNum::resetPid()
++{
++  pid_stable = 0;
++  pid = 0;
++}
++
++
++
++/*
++ * getPidStable(): returns the number of consecutive hits on same path from 
++ *                 S --> D
++ *
++ * author: Fernando Correia; date: Jun06
++ */
++int
++SARASeqNum::getPidStable()
++{
++  return pid_stable;
++}
++
++
++
++/*
++ * setFantState():
++ * returns information about the past FANT which was processed.
++ *
++ * author: Fernando Correia; date: Dez06
++ */
++void
++SARASeqNum::setFantState(int agn, int state)
++{
++  prevh_t *tmp;
++
++  assert(agn >= 0 && agn < MAXSN);
++  tmp = fant[agn].next;
++  if(tmp == NULL)
++    return;
++
++  switch(state){
++  case FANT_CONF:
++    tmp->fant_conf = true;
++    fant[agn].conf = true;
++    fant[agn].sn = agn;
++    break;
++
++  case FANT_NCONF:
++    tmp->fant_conf = false;
++    fant[agn].counter = 1;
++    fant[agn].conf = false;
++    fant[agn].sn = agn;
++    break;
++
++  case FANT_SCONF:
++    tmp->fant_conf = false;
++    fant[agn].conf = true;
++    fant[agn].sn = -1;
++    break;
++  }
++}
++
++
++
++/*
++ * getErrorLevel():
++ * when in presence of an error on FANT /BANT, it is required to know
++ * if the agent is closing or not to the source node
++ *
++ * autor: Fernando Correia; data: Dez06
++ */
++int
++SARASeqNum::getErrorLevel()
++{
++  int resultado = -1;           // closing to the source node
++
++  if(firstHopValue > minHops)
++    resultado = 1;              // going away to the source node
++
++  return resultado;
++}
++
++
++
++/*
++ * hasBANT():
++ * setBANT():
++ * this allow to identify route problems in the return path and avoid loops
++ *
++ * autor: Fernando Correia; data: Dez06
++ */
++bool
++SARASeqNum::hasBANT(int bantSn)
++{
++  return bant[bantSn];
++}
++
++
++void
++SARASeqNum::setBANT(int bantSn)
++{
++  assert(bantSn >= 0 && bantSn < MAXSN);
++  bant[bantSn] = true;
++}
++
++
++
++/*
++ * deleteNodeList(): delete the list with the nodes used in the
++ * route discovery procedure
++ *
++ * autor: Fernando Correia; data: Fev07
++ */
++void
++SARASeqNum::deleteNodeList()
++{
++  node_list_t *t1, *t2;
++
++  t2 = nl;
++
++  while(t2){
++    t1 = t2;
++    t2 = t2->next;
++    delete t1;
++  }
++  
++  nl = NULL;
++}
++
++
++/*
++ * addNodeToList(): add one node to the list
++ *
++ * autor: Fernando Correia; data: Fev07
++ */
++void
++SARASeqNum::addNodeToList(nsaddr_t add)
++{
++  node_list_t *tmp, *aux = nl;
++
++  if(!aux){			// the list is empty
++    tmp = new node_list_t;	// add one node
++    assert(tmp);
++    tmp->node = add;
++    tmp->count = 1;
++    tmp->next = NULL;
++    nl = tmp;
++    return;
++  }
++
++  if(aux->node == add)		// special condition: first link is the node to add
++      aux->count++;             // increase number of events
++  else{
++    while(aux->next){		// search through the list
++      if(aux->next->node == add){
++	aux->next->count++;	// found an entry, increase the counter and returns
++	return;
++      }
++      aux = aux->next;
++    }
++
++    tmp = new node_list_t;	// first time this node was used
++    assert(tmp);		
++    tmp->node = add;		// put the node at the end of the list
++    tmp->count = 1;
++    tmp->next = NULL;
++    aux->next = tmp;
++  }
++}
++
++
++/*
++ * getFantState(): checks the FANT confirmation state
++ *
++ * autor: Fernando Correia; data: Nov07
++ */
++int
++SARASeqNum::getFantState(int fant_id)
++{
++  int resultado;
++
++  assert(fant_id >= 0 && fant_id < MAXSN);
++
++  if(fant[fant_id].sn < 0)
++    resultado = FANT_SCONF;	// doesn't require confirmation
++  else if(!fant[fant_id].conf)
++    resultado = FANT_NCONF;	// FANT not confirmed
++  else
++    resultado = FANT_CONF;	// FANT already confirmed
++
++  return resultado;
++}
++
++
++
++nsaddr_t
++SARASeqNum::getShortPathAddr()
++{
++  return short_path_addr;
++}
+diff -Naur ns-2.34-orig/sara/sara_seqnum.h ns-2.34/sara/sara_seqnum.h
+--- ns-2.34-orig/sara/sara_seqnum.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/sara/sara_seqnum.h	2015-02-22 22:29:41.018736750 +0100
+@@ -0,0 +1,95 @@
++#ifndef _SARA_SEQNUM_H
++#define _SARA_SEQNUM_H
++
++#include <packet.h>
++#include <ara/ara_base.h>
++#include <sara/sara_pkt.h>
++
++#define MAXSN 16384
++#define VALID_TIME 100.0
++
++typedef struct _prevh{
++  nsaddr_t haddr;
++  int resp;
++  int type;
++  bool fant_conf;
++  struct _prevh *next;
++}prevh_t;
++
++
++typedef struct _node_list{
++  nsaddr_t node;
++  int count;
++  struct _node_list *next;
++}node_list_t;
++
++
++typedef struct _fant{
++  int sn;
++  int counter;
++  bool conf;
++  double conf_time;
++  prevh_t *next;
++}fant_t;
++
++
++
++class SARASeqNum : public ARABase {
++
++  int counter;                  /* counts number of packet safely reach source from destination */
++  int pid_stable;
++  int firstHopValue;
++  u_int16_t pid;
++  nsaddr_t short_path_addr;
++  node_list_t *nl;
++
++ public:
++  SARASeqNum(nsaddr_t, nsaddr_t);
++  virtual ~SARASeqNum();
++
++  virtual void addHop(int, nsaddr_t, int, int);
++  virtual void incCounter();
++  virtual void decCounter();
++  virtual void resetCounter();
++  virtual void resetFantArray();
++  virtual void setPid(u_int16_t);
++  virtual void resetPid();
++  virtual void setFantState(int, int);
++  virtual void setBANT(int);
++  virtual void addNodeToList(nsaddr_t);
++  virtual prevh_t *getHopList(int);
++  virtual bool hasBANT(int);
++  virtual bool hasFANT(int);
++  virtual bool hasCheckSN(int);
++  virtual bool hasConfFANT(int);
++  virtual bool nodeVisited(nsaddr_t, int);
++  virtual int getFantState(int);
++  virtual int nodeUsed(nsaddr_t);
++  virtual int getFirstHop(int);
++  virtual int getCounter();
++  virtual int getMinHop();
++  virtual int getPidStable();
++  virtual int getErrorLevel();
++  virtual nsaddr_t getShortPathAddr();
++  virtual u_int16_t getPid();
++  
++  virtual void deleteItem(int);
++  virtual void deleteFantList();
++  virtual void deleteNodeList();
++
++  /* public variables declaration */
++  bool firstTime;
++  bool pathFound;
++  double startTime, endTime, lastUse;
++  int seq_num;
++  int minHops;
++  nsaddr_t s, d;                /* source and destination addr for this data flow */
++  bool bant[MAXSN];
++  fant_t fant[MAXSN];
++
++  enum {INFO_DST, INFO_NGH, INFO_FWR, INFO_ERR, INFO_DEF};
++  enum {FANT_CONF, FANT_NCONF, FANT_SCONF};
++
++};
++
++#endif
+diff -Naur ns-2.34-orig/sara/sara_session.cc ns-2.34/sara/sara_session.cc
+--- ns-2.34-orig/sara/sara_session.cc	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/sara/sara_session.cc	2015-02-22 22:29:41.018736750 +0100
+@@ -0,0 +1,66 @@
++#include <assert.h>
++#include <sara/sara_session.h>
++
++
++/*
++ * SARASession() class constructor
++ *
++ * IN:
++ *   nsaddr_t saddr: flow source address
++ *   nsaddr_t daddr: flow destination address
++ *
++ * OUT:
++ *   NIL
++ *
++ * author: Fernando Correia; date: Dez06
++ */
++SARASession::SARASession(nsaddr_t sa, nsaddr_t da) :
++  ARABase(ARABase::calcHash(sa,da)),
++  src(sa),
++  dst(da),
++  start_time(CURRENT_TIME),
++  activo(true),
++  count(0),
++  next_time(start_time+SARA_REPARA_CAMINHO)
++{
++}
++
++
++SARASession::~SARASession()
++{
++}
++
++
++/*
++ * getSrc(): returns source node address
++ * getDst(): returns destination node address
++ *
++ * autor: Fernando Correia; data: Dez06
++ */
++nsaddr_t
++SARASession::getSrc() const
++{
++  return src;
++}
++
++
++nsaddr_t
++SARASession::getDst() const
++{
++  return dst;
++}
++
++
++
++double
++SARASession::getStartTime() const
++{
++  return start_time;
++}
++
++
++void
++SARASession::setStartTime(double st)
++{
++  start_time = st;
++}
+diff -Naur ns-2.34-orig/sara/sara_session.h ns-2.34/sara/sara_session.h
+--- ns-2.34-orig/sara/sara_session.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/sara/sara_session.h	2015-02-22 22:29:41.018736750 +0100
+@@ -0,0 +1,31 @@
++#ifndef _SARA_SESSION_H
++#define _SARA_SESSION_H
++
++#include <packet.h>
++#include <ara/ara_base.h>
++#include <sara/sara_pkt.h>  
++
++
++class SARASession : public ARABase {
++
++  nsaddr_t src;
++  nsaddr_t dst;
++  double start_time; 
++
++ public:
++  SARASession(nsaddr_t, nsaddr_t);
++  virtual ~SARASession();
++
++  virtual nsaddr_t getDst() const;
++  virtual nsaddr_t getSrc() const;
++  virtual double   getStartTime() const;
++  virtual void     setStartTime(double);
++
++  bool activo;
++  int count;
++  double next_time;
++
++};
++
++
++#endif
+diff -Naur ns-2.34-orig/tcl/lib/ns-default.tcl ns-2.34/tcl/lib/ns-default.tcl
+--- ns-2.34-orig/tcl/lib/ns-default.tcl	2009-06-14 19:35:41.000000000 +0200
++++ ns-2.34/tcl/lib/ns-default.tcl	2015-02-22 22:41:22.967803869 +0100
+@@ -1463,3 +1463,22 @@
+ Agent/PBC set periodicBroadcastVariance 0.1
+ Agent/PBC set modulationScheme 0
+ 
++Agent/SARA set F_ 1; #convergence factor
++Agent/SARA set ph_valid_ 1.0; #pheromone time life
++Agent/SARA set rand_seed_ 0; #random seed value - '0'-random
++Agent/SARA set bcast_limit_ 2; #DSA broadcast limit
++Agent/SARA set hello_int_ 5.0; #HELLO msg interval
++Agent/SARA set rd_int_ 0.5; #FANT generation interval - T0
++Agent/SARA set rr_int_ 1; #route repair timer
++Agent/SARA set sd_int_ 0.2; #FANT confirmation interval - T1
++Agent/SARA set retry_ 5; #max tx atemps
++Agent/SARA set ph_max_level_ 50; #default value for max value allowed for pheromon level
++Agent/SARA set metrica_ 0; #metric to use: 0-dist/pheromone (only)
++Agent/SARA set gps_ 0; #tx GPS msg: '0'-no; '1'-yes
++Agent/SARA set delta_ 0.1; #link recuperation index
++Agent/SARA set log_cbr_ 0.5; #
++Agent/SARA set ph_mod_ 3; #pheromone management model
++Agent/SARA set taxa_evaporacao_ 0.5; # pheromone evaporation rate for AS model
++Agent/TxCBR set packet_size_ 1000; #packet lebght
++Agent/TxCBR set txInt_ 0.16; #160ms each 1000B = 50kbps
++
+diff -Naur ns-2.34-orig/tcl/lib/ns-lib.tcl ns-2.34/tcl/lib/ns-lib.tcl
+--- ns-2.34-orig/tcl/lib/ns-lib.tcl	2009-06-14 19:35:41.000000000 +0200
++++ ns-2.34/tcl/lib/ns-lib.tcl	2015-02-22 22:45:08.614228739 +0100
+@@ -608,6 +608,7 @@
+ 	    idlePower_ sleepPower_ sleepTime_ transitionPower_ transitionTime_ \
+ 	    topoInstance_ level1_ level2_ inerrProc_ outerrProc_ FECProc_ rtAgentFunction_
+ 
++
+ 	Simulator set IMEPFlag_ OFF
+ 
+         # create node instance
+@@ -624,6 +625,10 @@
+ 		    DSDV {
+ 			    set ragent [$self create-dsdv-agent $node]
+ 		    }
++	            # Sara added
++	            SARA {
++		    set ragent [$self create-sara-agent $node]
++	            }		   
+ 		    DSR {
+ 			    $self at 0.0 "$node start-dsr"
+ 		    }
+@@ -845,6 +850,14 @@
+ 	return $ragent
+ }
+ 
++Simulator instproc create-sara-agent { node } {
++	# Create a sara routing agent for this node
++	set ragent [new Agent/SARA [$node node-addr]]
++	$self at 0.001 "$ragent start"
++	$node set ragent_ $ragent
++	return $ragent
++}
++
+ Simulator instproc create-aodv-agent { node } {
+         #  Create AODV routing agent
+ 	set ragent [new Agent/AODV [$node node-addr]]
+diff -Naur ns-2.34-orig/tcl/lib/ns-packet.tcl ns-2.34/tcl/lib/ns-packet.tcl
+--- ns-2.34-orig/tcl/lib/ns-packet.tcl	2009-06-14 19:35:41.000000000 +0200
++++ ns-2.34/tcl/lib/ns-packet.tcl	2015-02-22 22:29:41.020736815 +0100
+@@ -173,6 +173,9 @@
+ 	Encap 	# common/encap.cc
+         IPinIP 	# IP encapsulation 
+ 	HDLC 	# High Level Data Link Control
++	SARA
++	TXCBR
++# ....
+ } {
+ 	add-packet-header $prot
+ }
+diff -Naur ns-2.34-orig/trace/cmu-trace.cc ns-2.34/trace/cmu-trace.cc
+--- ns-2.34-orig/trace/cmu-trace.cc	2009-06-14 19:35:07.000000000 +0200
++++ ns-2.34/trace/cmu-trace.cc	2015-02-22 22:29:41.020736815 +0100
+@@ -1,3 +1,54 @@
++
++#include <sara/sara_pkt.h>
++
++#include <tx_cbr/tx_cbr.h>
++
++/* ... */
++
++void
++CMUTrace::format_txcbr(Packet *p, int offset) 
++{ 
++	struct hdr_cbr* cbrh = HDR_CBR(p);
++
++	sprintf(pt_->buffer() + offset, "-P TxCBR SRC=%d DST=%d SN=%d LEN=%d NHOPS=%d",
++		cbrh->saddr, cbrh->daddr, cbrh->id, cbrh->len, cbrh->nhop);
++}
++
++void 
++CMUTrace::format_sara(Packet *p, int offset) 
++{
++	struct hdr_sara* ah = HDR_SARA(p);
++
++
++	if(pt_->tagged()){
++
++		sprintf(pt_->buffer() + offset,
++
++			"-sara:s %d -sara:d %d -sara:t %d -sara:l %d ",
++			ah->sara_src(),
++			ah->sara_dst(),
++			ah->sara_type(),
++			ah->seq_num);
++	}
++	else{
++
++		switch(ah->sara_type()){
++		case SARA_HELLO:
++			sprintf(pt_->buffer() + offset,
++				"-P sara_hello -s %d -d BROADCAST",
++				ah->sara_prev());
++			break;
++		}
++
++	}
++} 
++
++/* ... */
++
++
++
++
++
+ /* -*-	Mode:C++; c-basic-offset:8; tab-width:8; indent-tabs-mode:t -*- */
+ /*
+  * Copyright (c) 1997 Regents of the University of California.
+@@ -1360,7 +1411,12 @@
+ 			break;
+ 		case PT_GAF:
+ 		case PT_PING:
++		case PT_SARA: 
++			format_sara(p, offset);
+ 			break;
++		case PT_TXCBR:
++			format_txcbr(p, offset);
++			break;			
+ 		default:
+ 
+ 			if(pktTrc_ && pktTrc_->format_unknow(p, offset, pt_, newtrace_))
+diff -Naur ns-2.34-orig/trace/cmu-trace.h ns-2.34/trace/cmu-trace.h
+--- ns-2.34-orig/trace/cmu-trace.h	2009-06-14 19:35:07.000000000 +0200
++++ ns-2.34/trace/cmu-trace.h	2015-02-22 22:47:56.291740881 +0100
+@@ -160,6 +160,9 @@
+         void    format_imep(Packet *p, int offset);
+         void    format_aodv(Packet *p, int offset);
+ 	void    format_aomdv(Packet *p, int offset);
++	void 	format_txcbr(Packet *p, int offset);
++	// Sara
++	void 	format_sara(Packet *p, int offset);
+ 
+ 	// This holds all the tracers added at run-time
+ 	static PacketTracer *pktTrc_;
+diff -Naur ns-2.34-orig/tx_cbr/tx_cbr.cc ns-2.34/tx_cbr/tx_cbr.cc
+--- ns-2.34-orig/tx_cbr/tx_cbr.cc	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/tx_cbr/tx_cbr.cc	2015-02-22 22:29:41.021736848 +0100
+@@ -0,0 +1,144 @@
++/*
++ * File: Code for a new 'TxCBR' Agent Class for the ns
++ *       network simulator
++ * Author: Marc Greis (greis@cs.uni-bonn.de), May 1998
++ *
++ */
++
++#include <stdio.h>
++#include <stdlib.h>
++
++#include <ara/ara_pkt.h>
++#include <tx_cbr/tx_cbr.h>
++
++int hdr_cbr::offset_;
++
++static class TxCBRHeaderClass : public PacketHeaderClass {
++public:
++  TxCBRHeaderClass() : PacketHeaderClass("PacketHeader/TxCBR", 
++                                         sizeof(hdr_cbr)) {}
++} class_txcbrhdr;
++
++
++static class TxCBRClass : public TclClass {
++public:
++  TxCBRClass() : TclClass("Agent/TxCBR") {}
++  TclObject* create(int, const char*const*) {
++    return (new TxCBRAgent());
++  }
++} class_tx_cbr;
++
++
++
++/*
++ * Timer CBR:
++ */
++void
++TxCBRTimer::expire(Event *e){
++#ifdef DEBUG_ARA
++  fprintf(stdout, "TxCBRTimer(): send a new packet(%d)\n", agent_->seq_num);
++#endif
++  agent_->resetTxCBRTimer();
++} 
++
++
++
++TxCBRAgent::TxCBRAgent() : Agent(PT_TXCBR),
++                           timer_(this),
++                           seq_num(0)
++{
++  bind("packetSize_", &size);
++  bind("txInt_", &txInt);
++}
++
++
++TxCBRAgent::~TxCBRAgent()
++{
++  timer_.force_cancel();
++}
++
++
++int 
++TxCBRAgent::command(int argc, const char*const* argv)
++{
++  if (argc == 2) {
++    if(strcmp(argv[1], "start") == 0) {
++      resetTxCBRTimer();
++      return (TCL_OK);
++    }
++    if(strcmp(argv[1], "stop") == 0) {
++      timer_.force_cancel();
++      return (TCL_OK);
++    }
++  }
++  else if(argc == 3){
++    if(strcmp(argv[1], "destAddr") == 0) {
++      daddr = (nsaddr_t)atoi(argv[2]);
++      return (TCL_OK);
++    }
++  }
++  // If the command hasn't been processed by PingAgent()::command,
++  // call the command() function for the base class
++  return (Agent::command(argc, argv));
++}
++
++
++void 
++TxCBRAgent::recv(Packet* p, Handler*)
++{
++  struct hdr_cbr *hdr = HDR_CBR(p);
++
++  if(hdr->ret == 0){            // recebi pacote
++#ifdef DEBUG_TX_CBR
++    fprintf(stdout, "Receive the packet %d, network travel time: %lf in %d hops\n",
++            hdr->id, CURRENT_TIME-hdr->send_time, hdr->nhop);
++#endif
++    sendPkt(hdr->saddr, hdr->id, 1);
++  }
++  else{
++#ifdef DEBUG_TX_CBR
++    fprintf(stdout, "Reply: %d->%d, id = %d, network travel time: %lf in %d hops\n",
++            hdr->daddr, hdr->saddr, hdr->id, CURRENT_TIME-hdr->send_time, hdr->nhop);
++#endif
++  }
++  Packet::free(p);
++}
++
++
++
++void
++TxCBRAgent::sendPkt()
++{
++  sendPkt(daddr, seq_num, 0);
++  seq_num++;
++}
++
++
++void
++TxCBRAgent::sendPkt(nsaddr_t daddr, int id, int rep)
++{
++  // Create a new packet
++  Packet* p = allocpkt();
++  // Access the Ping header for the new packet:
++  hdr_cbr* hdr = HDR_CBR(p);
++  // Set the 'ret' field to 0, so the receiving node knows
++  // that it has to generate an echo packet
++  hdr->len = size;
++  hdr->nhop= 0;
++  hdr->id  = id;
++  hdr->ret = rep;
++  hdr->daddr = daddr;
++  // Store the current time in the 'send_time' field
++  hdr->send_time = CURRENT_TIME;
++  // Send the packet
++  send(p, 0);
++}
++
++
++
++void
++TxCBRAgent::resetTxCBRTimer()
++{
++  sendPkt();
++  timer_.resched(txInt);
++}
+diff -Naur ns-2.34-orig/tx_cbr/tx_cbr.h ns-2.34/tx_cbr/tx_cbr.h
+--- ns-2.34-orig/tx_cbr/tx_cbr.h	1970-01-01 01:00:00.000000000 +0100
++++ ns-2.34/tx_cbr/tx_cbr.h	2015-02-22 22:29:41.021736848 +0100
+@@ -0,0 +1,83 @@
++/*
++ * File: Header File for a new 'Ping' Agent Class for the ns
++ *       network simulator
++ * Author: Marc Greis (greis@cs.uni-bonn.de), May 1998
++ *
++ */
++
++
++#ifndef TX_CBR_h
++#define TX_CBR_h
++
++#include <agent.h>
++#include <packet.h>
++#include <cmu-trace.h>
++#include <timer-handler.h>
++
++#define HDR_CBR(p) hdr_cbr::access(p) /* macro to extract CBR packet header */
++
++struct hdr_cbr {
++  int ret;
++  int id;
++  int nhop;
++  int len;
++  nsaddr_t daddr;
++  nsaddr_t saddr;
++  double send_time;
++  /* header access methods required by PacketHeaderManager */
++  static int offset_;
++  static int& offset() {return offset_;}
++  static hdr_cbr* access(const Packet *p) {
++    return (hdr_cbr *)p->access(offset_);
++  }
++};
++
++
++class TxCBRAgent;
++
++/*
++ * Timer: relogio para envio periodico de pacotes para a rede 
++ */
++class TxCBRTimer : public TimerHandler {
++ public:
++  TxCBRTimer(TxCBRAgent *agent) : TimerHandler() {
++    agent_ = agent;
++  }
++
++ protected:
++  TxCBRAgent *agent_;
++
++  virtual void expire(Event *e);
++};
++
++
++/*
++ * classe TxCBRAgent()
++ */
++class TxCBRAgent : public Agent {
++
++  friend class TxCBRTimer;
++
++  double txInt;
++  int size;
++  nsaddr_t daddr;
++
++ protected:
++  TxCBRTimer timer_;
++
++ public:
++  TxCBRAgent();
++  virtual ~TxCBRAgent();
++
++  int command(int argc, const char*const* argv);
++  void recv(Packet*, Handler*);
++  void sendPkt();
++  void sendPkt(nsaddr_t, int, int);
++  void replyPkT(int);
++  void resetTxCBRTimer();
++
++  int seq_num;
++};
++
++
++#endif
